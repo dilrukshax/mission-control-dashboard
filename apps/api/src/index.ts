@@ -708,7 +708,8 @@ function createChannelNote(folder: string, title: string, requester: string, tex
   return relPath;
 }
 
-function toAgentId(requester: string) {
+function toAgentId(requester: string, requesterId?: string) {
+  if (requesterId && requesterId.trim()) return `discord-${slugify(requesterId)}`;
   return `discord-${slugify(requester || "user")}`;
 }
 
@@ -721,8 +722,8 @@ function deptFromChannel(channel: string): string {
   return "mission-control";
 }
 
-function ensureAgentFromDiscord(requester: string, channel: string) {
-  const id = toAgentId(requester);
+function ensureAgentFromDiscord(requester: string, channel: string, requesterId?: string) {
+  const id = toAgentId(requester, requesterId);
   const dept = deptFromChannel(channel);
   const name = requester;
   const ts = nowIso();
@@ -768,6 +769,27 @@ function checkinAgent(agentId: string, messageText: string, dept: string) {
   pushEvent("agent.checkin", agentId);
 }
 
+app.post("/api/discord/sync-agents", requireRole("operator"), (req, res) => {
+  const p = req.body as {
+    agents?: Array<{ requester: string; requesterId?: string; channel: string }>;
+  };
+
+  if (!Array.isArray(p.agents) || p.agents.length === 0) {
+    return res.status(400).json({ error: "agents array is required" });
+  }
+
+  const seen = new Set<string>();
+  for (const a of p.agents) {
+    if (!a?.requester || !a?.channel) continue;
+    const agent = ensureAgentFromDiscord(a.requester, a.channel, a.requesterId);
+    if (seen.has(agent.id)) continue;
+    seen.add(agent.id);
+  }
+
+  pushEvent("agent.sync", String(seen.size));
+  return res.json({ ok: true, count: seen.size });
+});
+
 app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
   const payload = req.body as Record<string, unknown>;
 
@@ -789,6 +811,12 @@ app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
     (typeof payload.author_username === "string" && payload.author_username) ||
     "discord-user";
 
+  const requesterId =
+    (typeof payload.requester_id === "string" && payload.requester_id) ||
+    (typeof payload.author_id === "string" && payload.author_id) ||
+    (typeof payload.authorId === "string" && payload.authorId) ||
+    undefined;
+
   if (!text.trim()) return res.status(400).json({ error: "message text missing" });
 
   const normalizedChannel = channel.toLowerCase();
@@ -807,7 +835,7 @@ app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
     return res.status(200).json({ ignored: true, reason: "channel not mapped" });
   }
 
-  const agent = ensureAgentFromDiscord(requester, normalizedChannel);
+  const agent = ensureAgentFromDiscord(requester, normalizedChannel, requesterId);
   checkinAgent(agent.id, text, agent.dept);
 
   if (normalizedChannel === "research-intel" || normalizedChannel === "research") {
