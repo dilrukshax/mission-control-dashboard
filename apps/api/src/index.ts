@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { getEnv } from "./env.js";
 import { openDb } from "./db.js";
 
@@ -30,6 +32,18 @@ app.use(
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function dateOnly(ts = new Date()) {
+  return ts.toISOString().slice(0, 10);
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 type StreamEvent = {
@@ -280,6 +294,72 @@ app.post("/api/tasks", requireRole("operator"), (req, res) => {
   pushEvent("task.created", p.title);
 
   res.status(201).json({ ok: true, id });
+});
+
+app.post("/api/research/intake", requireRole("operator"), (req, res) => {
+  const p = req.body as {
+    topic?: string;
+    market?: string;
+    outputNeeded?: string;
+    deadline?: string;
+    requester?: string;
+    agentId?: string;
+  };
+
+  if (!p.topic || !p.market || !p.outputNeeded) {
+    return res
+      .status(400)
+      .json({ error: "topic, market, outputNeeded are required" });
+  }
+
+  const ts = nowIso();
+  const taskId = crypto.randomUUID();
+  const assignee = p.agentId ?? "scout";
+  const title = `Research: ${p.topic}`;
+  const description = [
+    `Market: ${p.market}`,
+    `Output needed: ${p.outputNeeded}`,
+    p.deadline ? `Deadline: ${p.deadline}` : null,
+    p.requester ? `Requester: ${p.requester}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  db.prepare(
+    `insert into tasks (
+      id, dept, title, description, status, assignee_agent_id,
+      created_at, updated_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(taskId, "research-intel", title, description, "todo", assignee, ts, ts);
+
+  db.prepare(
+    "insert into task_events (id, task_id, event_type, payload_json, ts) values (?, ?, ?, ?, ?)"
+  ).run(crypto.randomUUID(), taskId, "research_intake", JSON.stringify(p), ts);
+
+  const date = dateOnly();
+  const fileName = `${date} - ${slugify(p.topic)}.md`;
+  const relPath = path.join("01-Market", "Research Requests", fileName);
+  const absPath = path.join(env.OBSIDIAN_COMPANY_ROOT, relPath);
+  fs.mkdirSync(path.dirname(absPath), { recursive: true });
+
+  const note = `# Research Request - ${p.topic}\n\n## Brief\n- Topic: ${p.topic}\n- Market: ${p.market}\n- Output Needed: ${p.outputNeeded}\n- Deadline: ${p.deadline ?? "TBD"}\n- Requester: ${p.requester ?? "unknown"}\n- Assigned Agent: ${assignee}\n- Task ID: ${taskId}\n\n## Expected Deliverable\n${p.outputNeeded}\n\n## Sources\n- [ ] Add source links\n\n## Confidence\n- [ ] High / Medium / Low + reasoning\n\n## Notes\n- \n`;
+  fs.writeFileSync(absPath, note, "utf8");
+
+  logActivity({
+    kind: "research",
+    title: `Research intake: ${p.topic}`,
+    detail: p.market,
+    actor: assignee,
+    dept: "research-intel",
+  });
+  pushEvent("research.intake", p.topic);
+
+  res.status(201).json({
+    ok: true,
+    taskId,
+    assignee,
+    notePath: relPath,
+  });
 });
 
 app.patch("/api/tasks/:id", requireRole("operator"), (req, res) => {

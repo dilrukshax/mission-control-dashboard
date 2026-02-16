@@ -14,6 +14,7 @@ export const Env = z.object({
   AUTH_OWNER_KEY: z.string().min(1).optional(),
   AUTH_OPERATOR_KEY: z.string().min(1).optional(),
   AUTH_VIEWER_KEY: z.string().min(1).optional(),
+  OBSIDIAN_COMPANY_ROOT: z.string().default("/home/dilan/note/obsidian"),
 });
 
 export type Env = z.infer<typeof Env>;
@@ -29,6 +30,7 @@ export function getEnv(): Env {
     AUTH_OWNER_KEY: process.env.AUTH_OWNER_KEY,
     AUTH_OPERATOR_KEY: process.env.AUTH_OPERATOR_KEY,
     AUTH_VIEWER_KEY: process.env.AUTH_VIEWER_KEY,
+    OBSIDIAN_COMPANY_ROOT: process.env.OBSIDIAN_COMPANY_ROOT,
   });
   if (!parsed.success) {
     // eslint-disable-next-line no-console
