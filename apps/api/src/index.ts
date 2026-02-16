@@ -32,6 +32,29 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+type StreamEvent = {
+  id: string;
+  kind: string;
+  ts: string;
+  summary?: string;
+};
+
+const sseClients = new Set<express.Response>();
+
+function pushEvent(kind: string, summary?: string) {
+  const evt: StreamEvent = {
+    id: crypto.randomUUID(),
+    kind,
+    ts: nowIso(),
+    summary,
+  };
+
+  const payload = `id: ${evt.id}\nevent: update\ndata: ${JSON.stringify(evt)}\n\n`;
+  for (const res of sseClients) {
+    res.write(payload);
+  }
+}
+
 function logActivity(params: {
   kind: string;
   title: string;
@@ -52,6 +75,26 @@ function logActivity(params: {
     nowIso()
   );
 }
+
+app.get("/api/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  res.write(`event: hello\ndata: ${JSON.stringify({ ts: nowIso() })}\n\n`);
+
+  sseClients.add(res);
+
+  const keepAlive = setInterval(() => {
+    res.write(`event: ping\ndata: ${JSON.stringify({ ts: nowIso() })}\n\n`);
+  }, 25_000);
+
+  req.on("close", () => {
+    clearInterval(keepAlive);
+    sseClients.delete(res);
+  });
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -122,6 +165,7 @@ app.post("/api/agents/checkin", (req, res) => {
     detail: p.currentTask ?? p.note,
     actor: p.agentId,
   });
+  pushEvent("agent.checkin", p.agentId);
 
   res.json({ ok: true });
 });
@@ -174,6 +218,7 @@ app.post("/api/tasks", (req, res) => {
     actor: p.assigneeAgentId,
     dept: p.dept,
   });
+  pushEvent("task.created", p.title);
 
   res.status(201).json({ ok: true, id });
 });
@@ -236,6 +281,7 @@ app.patch("/api/tasks/:id", (req, res) => {
     actor: next.assigneeAgentId ?? undefined,
     dept: next.dept,
   });
+  pushEvent("task.updated", next.title);
 
   res.json({ ok: true });
 });
@@ -306,6 +352,7 @@ app.post("/api/tasks/upsert", (req, res) => {
     actor: p.assignee_agent_id,
     dept: p.dept,
   });
+  pushEvent("task.upsert", p.title);
 
   res.json({ ok: true, id: p.id });
 });
@@ -354,6 +401,7 @@ app.post("/api/content-drops", (req, res) => {
     actor: p.agentId,
     dept: p.dept,
   });
+  pushEvent("content.created", p.title);
 
   res.status(201).json({ ok: true });
 });
@@ -396,6 +444,7 @@ app.post("/api/build-jobs", (req, res) => {
     title: `Build ${p.status}: ${p.title}`,
     detail: p.note,
   });
+  pushEvent("build.created", p.title);
 
   res.status(201).json({ ok: true });
 });
@@ -424,6 +473,7 @@ app.post("/api/revenue", (req, res) => {
     title: `Revenue snapshot: $${p.amountUsd.toFixed(2)}`,
     detail: p.source,
   });
+  pushEvent("revenue.created", p.source);
 
   res.status(201).json({ ok: true });
 });
