@@ -485,23 +485,17 @@ app.post("/api/research/answer", requireRole("viewer"), (req, res) => {
   });
 });
 
-app.post("/api/discord/research-message", requireRole("operator"), (req, res) => {
-  const p = req.body as {
-    channel?: string;
-    text?: string;
-    requester?: string;
-  };
-
-  if (!p.text?.trim()) {
-    return res.status(400).json({ error: "text is required" });
-  }
-
-  const text = p.text.trim();
+function handleDiscordResearchMessage(input: {
+  channel?: string;
+  text: string;
+  requester?: string;
+}) {
+  const text = input.text.trim();
   const createPrefix = /^research\s*:\s*/i;
 
   if (createPrefix.test(text)) {
     const topic = text.replace(createPrefix, "").trim();
-    if (!topic) return res.status(400).json({ error: "research topic missing" });
+    if (!topic) return { status: 400, body: { error: "research topic missing" } };
 
     const ts = nowIso();
     const taskId = crypto.randomUUID();
@@ -510,8 +504,8 @@ app.post("/api/discord/research-message", requireRole("operator"), (req, res) =>
     const description = [
       `Market: unspecified`,
       `Output needed: summary with sources and recommendation`,
-      p.requester ? `Requester: ${p.requester}` : null,
-      p.channel ? `Channel: ${p.channel}` : null,
+      input.requester ? `Requester: ${input.requester}` : null,
+      input.channel ? `Channel: ${input.channel}` : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -529,24 +523,27 @@ app.post("/api/discord/research-message", requireRole("operator"), (req, res) =>
     const absPath = path.join(env.OBSIDIAN_COMPANY_ROOT, relPath);
     fs.mkdirSync(path.dirname(absPath), { recursive: true });
 
-    const note = `# Research Request - ${topic}\n\n## Brief\n- Topic: ${topic}\n- Market: TBD\n- Output Needed: summary with sources and recommendation\n- Requester: ${p.requester ?? "unknown"}\n- Task ID: ${taskId}\n\n## Notes\n- \n`;
+    const note = `# Research Request - ${topic}\n\n## Brief\n- Topic: ${topic}\n- Market: TBD\n- Output Needed: summary with sources and recommendation\n- Requester: ${input.requester ?? "unknown"}\n- Task ID: ${taskId}\n\n## Notes\n- \n`;
     fs.writeFileSync(absPath, note, "utf8");
 
     logActivity({
       kind: "research",
       title: `Discord research intake: ${topic}`,
-      detail: p.channel,
+      detail: input.channel,
       actor: assignee,
       dept: "research-intel",
     });
     pushEvent("research.intake", topic);
 
-    return res.status(201).json({
-      mode: "intake",
-      taskId,
-      notePath: relPath,
-      message: `Created research task and note for: ${topic}`,
-    });
+    return {
+      status: 201,
+      body: {
+        mode: "intake",
+        taskId,
+        notePath: relPath,
+        message: `Created research task and note for: ${topic}`,
+      },
+    };
   }
 
   const researchRoot = path.join(env.OBSIDIAN_COMPANY_ROOT, "01-Market");
@@ -566,20 +563,76 @@ app.post("/api/discord/research-message", requireRole("operator"), (req, res) =>
     .slice(0, 3);
 
   if (ranked.length === 0) {
-    return res.json({
-      mode: "lookup",
-      answer: "No prior research found for this query.",
-      sources: [],
-    });
+    return {
+      status: 200,
+      body: {
+        mode: "lookup",
+        answer: "No prior research found for this query.",
+        sources: [],
+      },
+    };
   }
 
-  return res.json({
-    mode: "lookup",
-    answer: ranked
-      .map((r, i) => `${i + 1}. ${r.relPath} — ${r.snippet}`)
-      .join("\n"),
-    sources: ranked.map((r) => r.relPath),
+  return {
+    status: 200,
+    body: {
+      mode: "lookup",
+      answer: ranked
+        .map((r, i) => `${i + 1}. ${r.relPath} — ${r.snippet}`)
+        .join("\n"),
+      sources: ranked.map((r) => r.relPath),
+    },
+  };
+}
+
+app.post("/api/discord/research-message", requireRole("operator"), (req, res) => {
+  const p = req.body as {
+    channel?: string;
+    text?: string;
+    requester?: string;
+  };
+
+  if (!p.text?.trim()) {
+    return res.status(400).json({ error: "text is required" });
+  }
+
+  const out = handleDiscordResearchMessage({
+    channel: p.channel,
+    text: p.text,
+    requester: p.requester,
   });
+  return res.status(out.status).json(out.body);
+});
+
+app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
+  const payload = req.body as Record<string, unknown>;
+
+  const text =
+    (typeof payload.text === "string" && payload.text) ||
+    (typeof payload.content === "string" && payload.content) ||
+    (typeof payload.message === "string" && payload.message) ||
+    "";
+
+  const channel =
+    (typeof payload.channel === "string" && payload.channel) ||
+    (typeof payload.channel_name === "string" && payload.channel_name) ||
+    (typeof payload.channelName === "string" && payload.channelName) ||
+    "";
+
+  const requester =
+    (typeof payload.requester === "string" && payload.requester) ||
+    (typeof payload.author === "string" && payload.author) ||
+    (typeof payload.author_username === "string" && payload.author_username) ||
+    "discord-user";
+
+  if (!text.trim()) return res.status(400).json({ error: "message text missing" });
+
+  if (channel && channel !== "research-intel" && channel !== "research") {
+    return res.status(200).json({ ignored: true, reason: "non-research channel" });
+  }
+
+  const out = handleDiscordResearchMessage({ channel, text, requester });
+  return res.status(out.status).json(out.body);
 });
 
 app.patch("/api/tasks/:id", requireRole("operator"), (req, res) => {
