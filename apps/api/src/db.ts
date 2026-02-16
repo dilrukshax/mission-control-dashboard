@@ -2,17 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 
-const DEFAULT_AGENTS = [
-  { id: "jarvis", name: "Mission Control Team", role: "Coordination", dept: "mission-control" },
-  { id: "closer", name: "Sales Team", role: "Sales Execution", dept: "sales-enable" },
-  { id: "ghost", name: "Marketing Content Team", role: "Content", dept: "marketing-growth" },
-  { id: "hype", name: "Marketing Social Team", role: "Social", dept: "marketing-growth" },
-  { id: "forge", name: "Engineering Delivery Team", role: "Delivery", dept: "eng-delivery" },
-  { id: "scout", name: "Research Team", role: "Research", dept: "research-intel" },
-  { id: "reviewer", name: "Engineering Platform Team", role: "Platform", dept: "eng-platform" },
-  { id: "keeper", name: "Knowledge Team", role: "Knowledge Base", dept: "ops-reliability" },
-] as const;
-
 export function openDb(dbPath: string) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
@@ -118,21 +107,6 @@ export function openDb(dbPath: string) {
 
     create index if not exists idx_activity_ts on activity_events(ts desc);
   `);
-
-  const now = new Date().toISOString();
-  const upsertAgent = db.prepare(
-    `insert into agents (id, name, role, dept, created_at, updated_at)
-     values (@id, @name, @role, @dept, @created_at, @updated_at)
-     on conflict(id) do update set
-       name=excluded.name,
-       role=excluded.role,
-       dept=excluded.dept,
-       updated_at=excluded.updated_at`
-  );
-
-  for (const agent of DEFAULT_AGENTS) {
-    upsertAgent.run({ ...agent, created_at: now, updated_at: now });
-  }
 
   return db;
 }

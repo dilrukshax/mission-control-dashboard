@@ -274,6 +274,63 @@ app.get("/api/agents", requireRole("viewer"), (_req, res) => {
   res.json({ agents: rows });
 });
 
+app.post("/api/agents/upsert", requireRole("operator"), (req, res) => {
+  const p = req.body as {
+    id?: string;
+    name?: string;
+    role?: string;
+    dept?: string;
+  };
+
+  if (!p.id || !p.name || !p.dept) {
+    return res.status(400).json({ error: "id, name, dept are required" });
+  }
+
+  const ts = nowIso();
+  db.prepare(
+    `insert into agents (id, name, role, dept, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)
+     on conflict(id) do update set
+       name=excluded.name,
+       role=excluded.role,
+       dept=excluded.dept,
+       updated_at=excluded.updated_at`
+  ).run(p.id, p.name, p.role ?? "Team", p.dept, ts, ts);
+
+  logActivity({ kind: "agent", title: `Agent upsert: ${p.name}`, dept: p.dept, actor: p.id });
+  pushEvent("agent.upsert", p.name);
+
+  res.json({ ok: true, id: p.id });
+});
+
+app.post("/api/agents/replace", requireRole("operator"), (req, res) => {
+  const p = req.body as {
+    agents?: Array<{ id: string; name: string; role?: string; dept: string }>;
+  };
+
+  if (!Array.isArray(p.agents)) {
+    return res.status(400).json({ error: "agents array is required" });
+  }
+
+  const ts = nowIso();
+  const tx = db.transaction(() => {
+    db.prepare("delete from agents").run();
+    const ins = db.prepare(
+      `insert into agents (id, name, role, dept, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?)`
+    );
+    for (const a of p.agents!) {
+      ins.run(a.id, a.name, a.role ?? "Team", a.dept, ts, ts);
+    }
+  });
+  tx();
+
+  logActivity({ kind: "agent", title: `Agents replaced (${p.agents.length})` });
+  pushEvent("agent.replace", String(p.agents.length));
+
+  res.json({ ok: true, count: p.agents.length });
+});
+
 app.post("/api/agents/checkin", requireRole("operator"), (req, res) => {
   const p = req.body as {
     agentId?: string;
