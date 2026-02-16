@@ -9,12 +9,14 @@ const TABS = [
   { key: "activity", label: "Activity", href: "/activity" },
 ] as const;
 
+const ROLE = process.env.NEXT_PUBLIC_MC_ROLE ?? "owner";
+
 export function Nav({ active }: { active: string }) {
   return (
     <header className="border-b bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <div className="font-semibold">Mission Control</div>
-        <div className="text-sm text-zinc-500">Pass 1 + Pass 2</div>
+        <div className="text-sm text-zinc-500">Role: {ROLE}</div>
       </div>
       <nav className="mx-auto max-w-6xl overflow-x-auto px-6 pb-3">
         <div className="flex gap-2">

@@ -64,8 +64,16 @@ function apiBase() {
   return process.env.MC_API_BASE ?? "http://127.0.0.1:3001";
 }
 
+function authHeaders(): HeadersInit {
+  const key = process.env.MC_API_KEY;
+  return key ? { "x-mc-key": key } : {};
+}
+
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${apiBase()}${path}`, { cache: "no-store" });
+  const res = await fetch(`${apiBase()}${path}`, {
+    cache: "no-store",
+    headers: authHeaders(),
+  });
   if (!res.ok) {
     throw new Error(`API ${path} failed: ${res.status}`);
   }
@@ -80,7 +88,7 @@ export async function fetchAgents(): Promise<Agent[]> {
 export async function fetchTasks(dept?: string): Promise<Task[]> {
   const url = new URL(`${apiBase()}/api/tasks`);
   if (dept) url.searchParams.set("dept", dept);
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url, { cache: "no-store", headers: authHeaders() });
   if (!res.ok) return [];
   const data = (await res.json()) as { tasks: Task[] };
   return data.tasks ?? [];

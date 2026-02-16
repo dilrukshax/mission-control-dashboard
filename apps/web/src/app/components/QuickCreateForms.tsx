@@ -3,9 +3,25 @@
 import { useState, type FormEvent } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_MC_API_BASE ?? "http://127.0.0.1:3001";
+const API_KEY = process.env.NEXT_PUBLIC_MC_API_KEY;
+const ROLE = process.env.NEXT_PUBLIC_MC_ROLE ?? "owner";
+const CAN_WRITE = ROLE === "owner" || ROLE === "operator";
+
+function authHeaders(): HeadersInit {
+  return API_KEY ? { "x-mc-key": API_KEY } : {};
+}
+
+function ReadOnlyCard() {
+  return (
+    <div className="rounded-lg border bg-white p-4 text-sm text-zinc-600">
+      Read-only mode ({ROLE}). Mutations are disabled.
+    </div>
+  );
+}
 
 export function QuickTaskForm() {
   const [saving, setSaving] = useState(false);
+  if (!CAN_WRITE) return <ReadOnlyCard />;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -15,7 +31,7 @@ export function QuickTaskForm() {
     setSaving(true);
     await fetch(`${API_BASE}/api/tasks`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         title: fd.get("title"),
         description: fd.get("description"),
@@ -44,6 +60,7 @@ export function QuickTaskForm() {
 
 export function QuickContentDropForm() {
   const [saving, setSaving] = useState(false);
+  if (!CAN_WRITE) return <ReadOnlyCard />;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,7 +70,7 @@ export function QuickContentDropForm() {
     setSaving(true);
     await fetch(`${API_BASE}/api/content-drops`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         title: fd.get("title"),
         dept: fd.get("dept"),
@@ -86,6 +103,7 @@ export function QuickContentDropForm() {
 
 export function QuickBuildForm() {
   const [saving, setSaving] = useState(false);
+  if (!CAN_WRITE) return <ReadOnlyCard />;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -95,7 +113,7 @@ export function QuickBuildForm() {
     setSaving(true);
     await fetch(`${API_BASE}/api/build-jobs`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         title: fd.get("title"),
         service: fd.get("service"),
@@ -124,6 +142,7 @@ export function QuickBuildForm() {
 
 export function QuickRevenueForm() {
   const [saving, setSaving] = useState(false);
+  if (!CAN_WRITE) return <ReadOnlyCard />;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -133,7 +152,7 @@ export function QuickRevenueForm() {
     setSaving(true);
     await fetch(`${API_BASE}/api/revenue`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         source: fd.get("source"),
         amountUsd: Number(fd.get("amountUsd")),

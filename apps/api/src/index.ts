@@ -76,7 +76,60 @@ function logActivity(params: {
   );
 }
 
-app.get("/api/stream", (req, res) => {
+type UserRole = "viewer" | "operator" | "owner";
+
+const roleRank: Record<UserRole, number> = {
+  viewer: 1,
+  operator: 2,
+  owner: 3,
+};
+
+const authEnabled =
+  !!env.AUTH_OWNER_KEY || !!env.AUTH_OPERATOR_KEY || !!env.AUTH_VIEWER_KEY;
+
+function extractApiKey(req: express.Request): string | null {
+  const xKey = req.header("x-mc-key");
+  if (xKey) return xKey;
+
+  const auth = req.header("authorization");
+  if (auth?.toLowerCase().startsWith("bearer ")) {
+    return auth.slice(7).trim();
+  }
+
+  const queryKey = req.query.key;
+  if (typeof queryKey === "string" && queryKey.length > 0) return queryKey;
+
+  return null;
+}
+
+function resolveRole(req: express.Request): UserRole | null {
+  if (!authEnabled) return "owner";
+
+  const key = extractApiKey(req);
+  if (!key) return null;
+
+  if (env.AUTH_OWNER_KEY && key === env.AUTH_OWNER_KEY) return "owner";
+  if (env.AUTH_OPERATOR_KEY && key === env.AUTH_OPERATOR_KEY) return "operator";
+  if (env.AUTH_VIEWER_KEY && key === env.AUTH_VIEWER_KEY) return "viewer";
+
+  return null;
+}
+
+function requireRole(minRole: UserRole): express.RequestHandler {
+  return (req, res, next) => {
+    const role = resolveRole(req);
+    if (!role || roleRank[role] < roleRank[minRole]) {
+      return res.status(403).json({
+        error: "forbidden",
+        requiredRole: minRole,
+      });
+    }
+
+    next();
+  };
+}
+
+app.get("/api/stream", requireRole("viewer"), (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
@@ -97,10 +150,16 @@ app.get("/api/stream", (req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, authEnabled });
 });
 
-app.get("/api/agents", (_req, res) => {
+app.get("/api/auth/me", (req, res) => {
+  const role = resolveRole(req);
+  if (!role) return res.status(401).json({ error: "unauthorized" });
+  res.json({ role });
+});
+
+app.get("/api/agents", requireRole("viewer"), (_req, res) => {
   const rows = db
     .prepare(
       `
@@ -129,7 +188,7 @@ app.get("/api/agents", (_req, res) => {
   res.json({ agents: rows });
 });
 
-app.post("/api/agents/checkin", (req, res) => {
+app.post("/api/agents/checkin", requireRole("operator"), (req, res) => {
   const p = req.body as {
     agentId?: string;
     status?: "active" | "sleeping";
@@ -170,7 +229,7 @@ app.post("/api/agents/checkin", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/tasks", (req, res) => {
+app.get("/api/tasks", requireRole("viewer"), (req, res) => {
   const dept = req.query.dept?.toString();
   const rows = dept
     ? db
@@ -183,7 +242,7 @@ app.get("/api/tasks", (req, res) => {
   res.json({ tasks: rows });
 });
 
-app.post("/api/tasks", (req, res) => {
+app.post("/api/tasks", requireRole("operator"), (req, res) => {
   const p = req.body as {
     title?: string;
     description?: string;
@@ -223,7 +282,7 @@ app.post("/api/tasks", (req, res) => {
   res.status(201).json({ ok: true, id });
 });
 
-app.patch("/api/tasks/:id", (req, res) => {
+app.patch("/api/tasks/:id", requireRole("operator"), (req, res) => {
   const id = req.params.id;
   const p = req.body as {
     title?: string;
@@ -286,7 +345,7 @@ app.patch("/api/tasks/:id", (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/tasks/upsert", (req, res) => {
+app.post("/api/tasks/upsert", requireRole("operator"), (req, res) => {
   const p = req.body as any;
   if (!p?.id || !p?.dept || !p?.title || !p?.status) {
     return res.status(400).json({ error: "missing required fields" });
@@ -357,14 +416,14 @@ app.post("/api/tasks/upsert", (req, res) => {
   res.json({ ok: true, id: p.id });
 });
 
-app.get("/api/content-drops", (_req, res) => {
+app.get("/api/content-drops", requireRole("viewer"), (_req, res) => {
   const rows = db
     .prepare("select * from content_drops order by created_at desc limit 200")
     .all();
   res.json({ contentDrops: rows });
 });
 
-app.post("/api/content-drops", (req, res) => {
+app.post("/api/content-drops", requireRole("operator"), (req, res) => {
   const p = req.body as {
     title?: string;
     dept?: string;
@@ -406,14 +465,14 @@ app.post("/api/content-drops", (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-app.get("/api/build-jobs", (_req, res) => {
+app.get("/api/build-jobs", requireRole("viewer"), (_req, res) => {
   const rows = db
     .prepare("select * from build_jobs order by started_at desc limit 200")
     .all();
   res.json({ buildJobs: rows });
 });
 
-app.post("/api/build-jobs", (req, res) => {
+app.post("/api/build-jobs", requireRole("operator"), (req, res) => {
   const p = req.body as {
     title?: string;
     service?: string;
@@ -449,7 +508,7 @@ app.post("/api/build-jobs", (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-app.get("/api/revenue", (_req, res) => {
+app.get("/api/revenue", requireRole("viewer"), (_req, res) => {
   const snapshots = db
     .prepare("select * from revenue_snapshots order by captured_at desc limit 120")
     .all() as { amount_usd: number }[];
@@ -457,7 +516,7 @@ app.get("/api/revenue", (_req, res) => {
   res.json({ snapshots, totalUsd });
 });
 
-app.post("/api/revenue", (req, res) => {
+app.post("/api/revenue", requireRole("operator"), (req, res) => {
   const p = req.body as { source?: string; amountUsd?: number; period?: string };
   if (!p?.source || typeof p.amountUsd !== "number") {
     return res.status(400).json({ error: "source and amountUsd required" });
@@ -478,7 +537,7 @@ app.post("/api/revenue", (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-app.get("/api/activity", (_req, res) => {
+app.get("/api/activity", requireRole("viewer"), (_req, res) => {
   const rows = db
     .prepare("select * from activity_events order by ts desc limit 300")
     .all();
