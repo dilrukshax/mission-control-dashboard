@@ -708,6 +708,66 @@ function createChannelNote(folder: string, title: string, requester: string, tex
   return relPath;
 }
 
+function toAgentId(requester: string) {
+  return `discord-${slugify(requester || "user")}`;
+}
+
+function deptFromChannel(channel: string): string {
+  const c = channel.toLowerCase();
+  if (c === "research-intel" || c === "research") return "research-intel";
+  if (c === "company-policy" || c === "policy") return "legal-policy";
+  if (c === "sales-enable" || c === "sales") return "sales-enable";
+  if (c === "ops-reliability" || c === "ops") return "ops-reliability";
+  return "mission-control";
+}
+
+function ensureAgentFromDiscord(requester: string, channel: string) {
+  const id = toAgentId(requester);
+  const dept = deptFromChannel(channel);
+  const name = requester;
+  const ts = nowIso();
+
+  db.prepare(
+    `insert into agents (id, name, role, dept, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)
+     on conflict(id) do update set
+       name=excluded.name,
+       dept=excluded.dept,
+       updated_at=excluded.updated_at`
+  ).run(id, name, "Discord Agent", dept, ts, ts);
+
+  return { id, name, dept };
+}
+
+function checkinAgent(agentId: string, messageText: string, dept: string) {
+  const prev = db
+    .prepare(
+      `select current_task from agent_checkins where agent_id=? order by ts desc limit 1`
+    )
+    .get(agentId) as { current_task?: string | null } | undefined;
+
+  const currentTask = messageText.slice(0, 140);
+  db.prepare(
+    `insert into agent_checkins (id, agent_id, status, current_task, previous_task, note, ts)
+     values (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    crypto.randomUUID(),
+    agentId,
+    "active",
+    currentTask,
+    prev?.current_task ?? null,
+    "Updated from Discord activity",
+    nowIso()
+  );
+
+  db.prepare(
+    `insert into memory_notes (id, dept, agent_id, note, created_at)
+     values (?, ?, ?, ?, ?)`
+  ).run(crypto.randomUUID(), dept, agentId, messageText.slice(0, 500), nowIso());
+
+  pushEvent("agent.checkin", agentId);
+}
+
 app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
   const payload = req.body as Record<string, unknown>;
 
@@ -732,6 +792,23 @@ app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
   if (!text.trim()) return res.status(400).json({ error: "message text missing" });
 
   const normalizedChannel = channel.toLowerCase();
+  const mappedChannels = new Set([
+    "research-intel",
+    "research",
+    "company-policy",
+    "policy",
+    "sales-enable",
+    "sales",
+    "ops-reliability",
+    "ops",
+  ]);
+
+  if (!mappedChannels.has(normalizedChannel)) {
+    return res.status(200).json({ ignored: true, reason: "channel not mapped" });
+  }
+
+  const agent = ensureAgentFromDiscord(requester, normalizedChannel);
+  checkinAgent(agent.id, text, agent.dept);
 
   if (normalizedChannel === "research-intel" || normalizedChannel === "research") {
     const out = handleDiscordResearchMessage({ channel, text, requester });
@@ -1055,6 +1132,21 @@ app.post("/api/revenue", requireRole("operator"), (req, res) => {
   pushEvent("revenue.created", p.source);
 
   res.status(201).json({ ok: true });
+});
+
+app.get("/api/memory-notes", requireRole("viewer"), (req, res) => {
+  const agentId = req.query.agentId?.toString();
+  const rows = agentId
+    ? db
+        .prepare(
+          "select * from memory_notes where agent_id=? order by created_at desc limit 100"
+        )
+        .all(agentId)
+    : db
+        .prepare("select * from memory_notes order by created_at desc limit 300")
+        .all();
+
+  res.json({ memoryNotes: rows });
 });
 
 app.get("/api/activity", requireRole("viewer"), (_req, res) => {

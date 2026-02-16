@@ -20,8 +20,10 @@ export function AgentCard({ agent }: { agent: Agent }) {
         </div>
       </div>
       <div className="space-y-1 text-xs text-zinc-600">
+        <div><span className="font-medium text-zinc-700">Agent ID:</span> {agent.id}</div>
         <div><span className="font-medium text-zinc-700">Current:</span> {agent.current_task ?? "—"}</div>
         <div><span className="font-medium text-zinc-700">Previous:</span> {agent.previous_task ?? "—"}</div>
+        <div><span className="font-medium text-zinc-700">Memory:</span> {agent.note ?? "—"}</div>
         <div><span className="font-medium text-zinc-700">Check-in:</span> {agent.last_checkin_at ? new Date(agent.last_checkin_at).toLocaleString() : "never"}</div>
       </div>
     </div>
