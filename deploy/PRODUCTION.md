@@ -20,6 +20,8 @@ cp .env.prod.example .env.prod
 ./deploy/systemd/install-user-services.sh
 ```
 
+If `DISCORD_BOT_TOKEN` is set in `.env.prod`, the Discord bridge bot service is also enabled automatically.
+
 ## 4) Verify
 
 ```bash
@@ -35,8 +37,10 @@ Expected:
 ```bash
 systemctl --user restart mission-control-api
 systemctl --user restart mission-control-web
+systemctl --user restart mission-control-discord-bridge
 journalctl --user -u mission-control-api -f
 journalctl --user -u mission-control-web -f
+journalctl --user -u mission-control-discord-bridge -f
 ```
 
 ## Discord bridge endpoint
@@ -55,3 +59,14 @@ Payload should include at least:
 
 Research intake trigger:
 - message starts with `Research: ...`
+
+Additional bridged channels:
+- `company-policy` / `policy`
+  - create note: `Policy: ...`
+  - otherwise lookup in `00-Company/Policies` + `06-Decisions`
+- `sales-enable` / `sales`
+  - create note: `Sales: ...`
+  - otherwise lookup in `03-Sales` + `01-Market`
+- `ops-reliability` / `ops`
+  - create note: `Ops: ...`
+  - otherwise lookup in `05-Ops` + `06-Decisions`

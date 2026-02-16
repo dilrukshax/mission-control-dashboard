@@ -66,22 +66,37 @@ function getMarkdownFiles(rootDir: string): string[] {
   return out;
 }
 
-function scoreText(content: string, query: string): number {
-  const q = query
+function tokenizeQuery(query: string): string[] {
+  return query
     .toLowerCase()
     .split(/\s+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 1);
+}
 
+function scoreText(content: string, query: string, relPath = ""): number {
+  const q = tokenizeQuery(query);
   const body = content.toLowerCase();
+  const title = (content.match(/^#\s+(.+)$/m)?.[1] ?? "").toLowerCase();
+  const pathText = relPath.toLowerCase();
+
   let score = 0;
   for (const token of q) {
+    // body matches (base signal)
     let idx = body.indexOf(token);
     while (idx !== -1) {
       score += 1;
       idx = body.indexOf(token, idx + token.length);
     }
+
+    // title/path boosts
+    if (title.includes(token)) score += 6;
+    if (pathText.includes(token)) score += 4;
+
+    // exact phrase in body boost (for longer queries)
+    if (query.length > 8 && body.includes(query.toLowerCase())) score += 8;
   }
+
   return score;
 }
 
@@ -429,8 +444,8 @@ app.get("/api/research/search", requireRole("viewer"), (req, res) => {
   const matches = files
     .map((file) => {
       const content = fs.readFileSync(file, "utf8");
-      const score = scoreText(content, q);
       const relPath = path.relative(env.OBSIDIAN_COMPANY_ROOT, file);
+      const score = scoreText(content, q, relPath);
       return {
         path: relPath,
         score,
@@ -455,10 +470,11 @@ app.post("/api/research/answer", requireRole("viewer"), (req, res) => {
   const ranked = files
     .map((file) => {
       const content = fs.readFileSync(file, "utf8");
-      const score = scoreText(content, query);
+      const relPath = path.relative(env.OBSIDIAN_COMPANY_ROOT, file);
+      const score = scoreText(content, query, relPath);
       return {
         file,
-        relPath: path.relative(env.OBSIDIAN_COMPANY_ROOT, file),
+        relPath,
         score,
         snippet: summarizeMatch(content, query),
       };
@@ -551,9 +567,10 @@ function handleDiscordResearchMessage(input: {
   const ranked = files
     .map((file) => {
       const content = fs.readFileSync(file, "utf8");
-      const score = scoreText(content, text);
+      const relPath = path.relative(env.OBSIDIAN_COMPANY_ROOT, file);
+      const score = scoreText(content, text, relPath);
       return {
-        relPath: path.relative(env.OBSIDIAN_COMPANY_ROOT, file),
+        relPath,
         score,
         snippet: summarizeMatch(content, text),
       };
@@ -604,6 +621,36 @@ app.post("/api/discord/research-message", requireRole("operator"), (req, res) =>
   return res.status(out.status).json(out.body);
 });
 
+function searchNotesInRoots(query: string, roots: string[]) {
+  const ranked = roots
+    .flatMap((root) => {
+      const abs = path.join(env.OBSIDIAN_COMPANY_ROOT, root);
+      return getMarkdownFiles(abs);
+    })
+    .map((file) => {
+      const relPath = path.relative(env.OBSIDIAN_COMPANY_ROOT, file);
+      const content = fs.readFileSync(file, "utf8");
+      const score = scoreText(content, query, relPath);
+      return { relPath, score, snippet: summarizeMatch(content, query) };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+
+  return ranked;
+}
+
+function createChannelNote(folder: string, title: string, requester: string, text: string) {
+  const fileName = `${dateOnly()} - ${slugify(title)}.md`;
+  const relPath = path.join(folder, fileName);
+  const absPath = path.join(env.OBSIDIAN_COMPANY_ROOT, relPath);
+  fs.mkdirSync(path.dirname(absPath), { recursive: true });
+
+  const body = `# ${title}\n\n- Date: ${nowIso()}\n- Requester: ${requester}\n\n## Context\n${text}\n\n## Notes\n- \n`;
+  fs.writeFileSync(absPath, body, "utf8");
+  return relPath;
+}
+
 app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
   const payload = req.body as Record<string, unknown>;
 
@@ -627,12 +674,75 @@ app.post("/api/discord/bridge", requireRole("operator"), (req, res) => {
 
   if (!text.trim()) return res.status(400).json({ error: "message text missing" });
 
-  if (channel && channel !== "research-intel" && channel !== "research") {
-    return res.status(200).json({ ignored: true, reason: "non-research channel" });
+  const normalizedChannel = channel.toLowerCase();
+
+  if (normalizedChannel === "research-intel" || normalizedChannel === "research") {
+    const out = handleDiscordResearchMessage({ channel, text, requester });
+    return res.status(out.status).json(out.body);
   }
 
-  const out = handleDiscordResearchMessage({ channel, text, requester });
-  return res.status(out.status).json(out.body);
+  if (normalizedChannel === "company-policy" || normalizedChannel === "policy") {
+    const createPrefix = /^policy\s*:\s*/i;
+    if (createPrefix.test(text)) {
+      const topic = text.replace(createPrefix, "").trim() || "Policy Note";
+      const relPath = createChannelNote("00-Company/Policies", `Policy - ${topic}`, requester, text);
+      return res.status(201).json({
+        mode: "policy-intake",
+        message: `Policy note created: ${relPath}`,
+        notePath: relPath,
+      });
+    }
+
+    const matches = searchNotesInRoots(text, ["00-Company/Policies", "06-Decisions"]);
+    return res.status(200).json({
+      mode: "policy-lookup",
+      answer:
+        matches.length === 0
+          ? "No prior policy notes found."
+          : matches.map((m, i) => `${i + 1}. ${m.relPath} — ${m.snippet}`).join("\n"),
+      sources: matches.map((m) => m.relPath),
+    });
+  }
+
+  if (normalizedChannel === "sales-enable" || normalizedChannel === "sales") {
+    const createPrefix = /^sales\s*:\s*/i;
+    if (createPrefix.test(text)) {
+      const topic = text.replace(createPrefix, "").trim() || "Sales Note";
+      const relPath = createChannelNote("03-Sales", `Sales - ${topic}`, requester, text);
+      return res.status(201).json({ mode: "sales-intake", message: `Sales note created: ${relPath}`, notePath: relPath });
+    }
+
+    const matches = searchNotesInRoots(text, ["03-Sales", "01-Market"]);
+    return res.status(200).json({
+      mode: "sales-lookup",
+      answer:
+        matches.length === 0
+          ? "No prior sales notes found."
+          : matches.map((m, i) => `${i + 1}. ${m.relPath} — ${m.snippet}`).join("\n"),
+      sources: matches.map((m) => m.relPath),
+    });
+  }
+
+  if (normalizedChannel === "ops-reliability" || normalizedChannel === "ops") {
+    const createPrefix = /^ops\s*:\s*/i;
+    if (createPrefix.test(text)) {
+      const topic = text.replace(createPrefix, "").trim() || "Ops Note";
+      const relPath = createChannelNote("05-Ops", `Ops - ${topic}`, requester, text);
+      return res.status(201).json({ mode: "ops-intake", message: `Ops note created: ${relPath}`, notePath: relPath });
+    }
+
+    const matches = searchNotesInRoots(text, ["05-Ops", "06-Decisions"]);
+    return res.status(200).json({
+      mode: "ops-lookup",
+      answer:
+        matches.length === 0
+          ? "No prior ops notes found."
+          : matches.map((m, i) => `${i + 1}. ${m.relPath} — ${m.snippet}`).join("\n"),
+      sources: matches.map((m) => m.relPath),
+    });
+  }
+
+  return res.status(200).json({ ignored: true, reason: "channel not mapped" });
 });
 
 app.patch("/api/tasks/:id", requireRole("operator"), (req, res) => {

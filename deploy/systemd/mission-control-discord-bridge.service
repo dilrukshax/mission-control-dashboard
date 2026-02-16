@@ -1,0 +1,21 @@
+[Unit]
+Description=Mission Control Discord Bridge Bot
+After=network-online.target mission-control-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/dilan/mission-control-dashboard/apps/api
+EnvironmentFile=/home/dilan/mission-control-dashboard/.env.prod
+ExecStart=/usr/bin/node /home/dilan/mission-control-dashboard/apps/api/dist/discord-bridge-bot.js
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/home/dilan/mission-control-dashboard
+
+[Install]
+WantedBy=default.target
