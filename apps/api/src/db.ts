@@ -106,6 +106,17 @@ export function openDb(dbPath: string) {
     );
 
     create index if not exists idx_activity_ts on activity_events(ts desc);
+
+    create table if not exists network_usage_samples (
+      at integer primary key,
+      ts text not null,
+      inbound_bytes_total integer,
+      outbound_bytes_total integer,
+      inbound_bytes_delta integer,
+      outbound_bytes_delta integer
+    );
+
+    create index if not exists idx_network_usage_samples_ts on network_usage_samples(ts desc);
   `);
 
   return db;

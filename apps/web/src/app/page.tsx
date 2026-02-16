@@ -1,56 +1,68 @@
-import { Nav } from "./components/Nav";
 import { AgentCard } from "./components/AgentCard";
 import { fetchAgents, fetchTasks } from "./lib/api";
 import { TaskTable } from "./components/TaskTable";
 import { QuickTaskForm } from "./components/QuickCreateForms";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function Home() {
   const [agents, tasks] = await Promise.all([fetchAgents(), fetchTasks()]);
 
   const activeCount = agents.filter((a) => a.current_status === "active").length;
   const sleepingCount = agents.filter((a) => a.current_status === "sleeping").length;
+  const openTasks = tasks.filter((t) => t.status !== "done").length;
+
+  const stats = [
+    { label: "Total Agents", value: agents.length, color: "text-primary" },
+    { label: "Active", value: activeCount, color: "text-emerald-600 dark:text-emerald-400" },
+    { label: "Sleeping", value: sleepingCount, color: "text-muted-foreground" },
+    { label: "Open Tasks", value: openTasks, color: "text-blue-600 dark:text-blue-400" },
+  ];
 
   return (
-    <div className="min-h-screen">
-      <Nav active="dashboard" />
+    <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="text-[26px] font-bold tracking-tight leading-tight">Dashboard</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">Overview of your AI agent operations</p>
+      </div>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-6 py-6">
-        <section className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-lg border bg-white p-4">
-            <div className="text-xs text-zinc-500">Agents</div>
-            <div className="mt-1 text-2xl font-semibold">{agents.length}</div>
-          </div>
-          <div className="rounded-lg border bg-white p-4">
-            <div className="text-xs text-zinc-500">Active</div>
-            <div className="mt-1 text-2xl font-semibold text-emerald-600">{activeCount}</div>
-          </div>
-          <div className="rounded-lg border bg-white p-4">
-            <div className="text-xs text-zinc-500">Sleeping</div>
-            <div className="mt-1 text-2xl font-semibold text-zinc-600">{sleepingCount}</div>
-          </div>
-          <div className="rounded-lg border bg-white p-4">
-            <div className="text-xs text-zinc-500">Open tasks</div>
-            <div className="mt-1 text-2xl font-semibold">{tasks.filter((t) => t.status !== "done").length}</div>
-          </div>
-        </section>
+      {/* Stats grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((s) => (
+          <Card key={s.label}>
+            <CardHeader className="pb-2">
+              <CardTitle className={`text-[11px] font-medium uppercase tracking-wider ${s.color}`}>
+                {s.label}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{s.value}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-zinc-700">Agent status</h2>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} />
-            ))}
-          </div>
-        </section>
+      {/* Agent status */}
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Agent Status</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
+        </div>
+      </div>
 
-        <section className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2">
-            <h2 className="mb-2 text-sm font-semibold text-zinc-700">Latest tasks</h2>
-            <TaskTable tasks={tasks} />
-          </div>
+      {/* Latest tasks + Quick create */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <h2 className="mb-3 text-lg font-semibold">Latest Tasks</h2>
+          <TaskTable tasks={tasks} />
+        </div>
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Quick Create</h2>
           <QuickTaskForm />
-        </section>
-      </main>
+        </div>
+      </div>
     </div>
   );
 }

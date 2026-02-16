@@ -17,7 +17,15 @@ export type Task = {
   description?: string | null;
   status: string;
   assignee_agent_id?: string | null;
+  owner_agent?: string | null;
+  eta?: string | null;
+  blockers?: string | null;
+  approval_needed?: number | null;
+  approval_reason?: string | null;
   updated_at: string;
+  created_at?: string;
+  source_session?: string | null;
+  source_message?: string | null;
 };
 
 export type ContentDrop = {
@@ -58,6 +66,98 @@ export type ActivityEvent = {
   actor?: string | null;
   dept?: string | null;
   ts: string;
+};
+
+export type SystemMetricSample = {
+  ts: string;
+  cpuUsagePercent: number | null;
+  cpuTempC: number | null;
+  memoryUsagePercent: number | null;
+  diskUsagePercent: number | null;
+};
+
+export type SystemMetrics = {
+  windowMs: number;
+  intervalMs: number;
+  sampledAt: string;
+  cpu: {
+    usagePercent: number | null;
+    cores: number;
+    model: string | null;
+    loadAvg: number[];
+    window: {
+      avgPercent: number | null;
+      minPercent: number | null;
+      maxPercent: number | null;
+    };
+  };
+  thermal: {
+    cpuTempC: number | null;
+    window: {
+      avgC: number | null;
+      minC: number | null;
+      maxC: number | null;
+    };
+  };
+  memory: {
+    usagePercent: number | null;
+    usedBytes: number | null;
+    totalBytes: number | null;
+    availableBytes: number | null;
+    window: {
+      avgPercent: number | null;
+      minPercent: number | null;
+      maxPercent: number | null;
+    };
+  };
+  disk: {
+    mountPath: string;
+    usagePercent: number | null;
+    usedBytes: number | null;
+    totalBytes: number | null;
+    freeBytes: number | null;
+    window: {
+      avgPercent: number | null;
+      minPercent: number | null;
+      maxPercent: number | null;
+    };
+  };
+  samples: SystemMetricSample[];
+};
+
+export type SystemNetworkUsageDaily = {
+  day: string;
+  sampleCount: number;
+  inboundBytes: number;
+  outboundBytes: number;
+};
+
+export type SystemNetworkUsageRecent = {
+  ts: string;
+  inboundBps: number | null;
+  outboundBps: number | null;
+};
+
+export type SystemNetworkUsage = {
+  retentionMs: number;
+  intervalMs: number;
+  startedAt: string;
+  sampleCount: number;
+  expectedSamples: number;
+  coveragePercent: number;
+  firstSampleAt: string | null;
+  lastSampleAt: string | null;
+  totals: {
+    inboundBytes: number;
+    outboundBytes: number;
+  };
+  current: {
+    sampledAt: string | null;
+    inboundBps: number | null;
+    outboundBps: number | null;
+  };
+  daily: SystemNetworkUsageDaily[];
+  recent: SystemNetworkUsageRecent[];
 };
 
 function apiBase() {
@@ -111,4 +211,26 @@ export async function fetchRevenue(): Promise<{ snapshots: RevenueSnapshot[]; to
 export async function fetchActivity(): Promise<ActivityEvent[]> {
   const data = await getJson<{ activity: ActivityEvent[] }>("/api/activity");
   return data.activity ?? [];
+}
+
+export async function fetchSystemMetrics(): Promise<SystemMetrics> {
+  return getJson<SystemMetrics>("/api/system/metrics");
+}
+
+export async function fetchSystemNetworkUsage(): Promise<SystemNetworkUsage> {
+  return getJson<SystemNetworkUsage>("/api/system/network-usage");
+}
+
+export type MemoryNote = {
+  id: string;
+  dept: string;
+  agent_id?: string | null;
+  note: string;
+  created_at: string;
+};
+
+export async function fetchMemoryNotes(agentId?: string): Promise<MemoryNote[]> {
+  const url = agentId ? `/api/memory-notes?agentId=${encodeURIComponent(agentId)}` : "/api/memory-notes";
+  const data = await getJson<{ memoryNotes: MemoryNote[] }>(url);
+  return data.memoryNotes ?? [];
 }
