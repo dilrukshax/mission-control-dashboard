@@ -1,18 +1,12 @@
 import Link from "next/link";
 
 const TABS = [
-  { key: "mission-control", label: "Mission Control" },
-  { key: "eng-platform", label: "Eng Platform" },
-  { key: "eng-delivery", label: "Eng Delivery" },
-  { key: "research-intel", label: "Research" },
-  { key: "product-strategy", label: "Product" },
-  { key: "marketing-growth", label: "Marketing" },
-  { key: "sales-enable", label: "Sales" },
-  { key: "ops-reliability", label: "Ops" },
-  { key: "finance-ops", label: "Finance" },
-  { key: "legal-policy", label: "Legal" },
-  { key: "cron", label: "Cron" },
-  { key: "logs", label: "Logs" },
+  { key: "dashboard", label: "Dashboard", href: "/" },
+  { key: "tasks", label: "Tasks", href: "/tasks" },
+  { key: "content", label: "Content", href: "/content" },
+  { key: "builds", label: "Builds", href: "/builds" },
+  { key: "revenue", label: "Revenue", href: "/revenue" },
+  { key: "activity", label: "Activity", href: "/activity" },
 ] as const;
 
 export function Nav({ active }: { active: string }) {
@@ -20,7 +14,7 @@ export function Nav({ active }: { active: string }) {
     <header className="border-b bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <div className="font-semibold">Mission Control</div>
-        <div className="text-sm text-zinc-500">v0</div>
+        <div className="text-sm text-zinc-500">Pass 1 + Pass 2</div>
       </div>
       <nav className="mx-auto max-w-6xl overflow-x-auto px-6 pb-3">
         <div className="flex gap-2">
@@ -29,10 +23,10 @@ export function Nav({ active }: { active: string }) {
             return (
               <Link
                 key={t.key}
-                href={t.key === "mission-control" ? "/" : `/dept/${t.key}`}
+                href={t.href}
                 className={`rounded-full border px-3 py-1 text-sm ${
                   isActive
-                    ? "bg-zinc-900 text-white border-zinc-900"
+                    ? "border-zinc-900 bg-zinc-900 text-white"
                     : "bg-white text-zinc-700"
                 }`}
               >

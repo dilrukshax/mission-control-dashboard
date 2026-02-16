@@ -35,6 +35,9 @@ importers:
       '@types/express':
         specifier: ^4.17.23
         version: 4.17.25
+      '@types/node':
+        specifier: ^20
+        version: 20.19.33
       tsx:
         specifier: ^4.20.5
         version: 4.21.0

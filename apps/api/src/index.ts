@@ -22,13 +22,107 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 60_000,
-    limit: 240,
+    limit: 300,
     standardHeaders: true,
     legacyHeaders: false,
   })
 );
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function logActivity(params: {
+  kind: string;
+  title: string;
+  detail?: string;
+  actor?: string;
+  dept?: string;
+}) {
+  db.prepare(
+    `insert into activity_events (id, kind, title, detail, actor, dept, ts)
+     values (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    crypto.randomUUID(),
+    params.kind,
+    params.title,
+    params.detail ?? null,
+    params.actor ?? null,
+    params.dept ?? null,
+    nowIso()
+  );
+}
+
 app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
+app.get("/api/agents", (_req, res) => {
+  const rows = db
+    .prepare(
+      `
+      select
+        a.id,
+        a.name,
+        a.role,
+        a.dept,
+        c.status as current_status,
+        c.current_task,
+        c.previous_task,
+        c.note,
+        c.ts as last_checkin_at
+      from agents a
+      left join agent_checkins c on c.id = (
+        select c2.id from agent_checkins c2
+        where c2.agent_id = a.id
+        order by c2.ts desc
+        limit 1
+      )
+      order by a.name asc
+      `
+    )
+    .all();
+
+  res.json({ agents: rows });
+});
+
+app.post("/api/agents/checkin", (req, res) => {
+  const p = req.body as {
+    agentId?: string;
+    status?: "active" | "sleeping";
+    currentTask?: string;
+    previousTask?: string;
+    note?: string;
+  };
+
+  if (!p?.agentId || !p?.status) {
+    return res.status(400).json({ error: "agentId and status are required" });
+  }
+
+  const exists = db.prepare("select id from agents where id = ?").get(p.agentId);
+  if (!exists) return res.status(404).json({ error: "agent not found" });
+
+  const ts = nowIso();
+  db.prepare(
+    `insert into agent_checkins (id, agent_id, status, current_task, previous_task, note, ts)
+     values (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    crypto.randomUUID(),
+    p.agentId,
+    p.status,
+    p.currentTask ?? null,
+    p.previousTask ?? null,
+    p.note ?? null,
+    ts
+  );
+
+  logActivity({
+    kind: "checkin",
+    title: `Agent ${p.agentId} checked in`,
+    detail: p.currentTask ?? p.note,
+    actor: p.agentId,
+  });
+
   res.json({ ok: true });
 });
 
@@ -37,76 +131,313 @@ app.get("/api/tasks", (req, res) => {
   const rows = dept
     ? db
         .prepare(
-          "select * from tasks where dept = ? order by updated_at desc limit 200"
+          "select * from tasks where dept = ? order by updated_at desc limit 300"
         )
         .all(dept)
-    : db
-        .prepare("select * from tasks order by updated_at desc limit 200")
-        .all();
+    : db.prepare("select * from tasks order by updated_at desc limit 300").all();
+
   res.json({ tasks: rows });
 });
 
+app.post("/api/tasks", (req, res) => {
+  const p = req.body as {
+    title?: string;
+    description?: string;
+    dept?: string;
+    status?: string;
+    assigneeAgentId?: string;
+  };
+
+  if (!p?.title || !p?.dept) {
+    return res.status(400).json({ error: "title and dept are required" });
+  }
+
+  const id = crypto.randomUUID();
+  const ts = nowIso();
+  const status = p.status ?? "todo";
+
+  db.prepare(
+    `insert into tasks (
+      id, dept, title, description, status, assignee_agent_id,
+      created_at, updated_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, p.dept, p.title, p.description ?? null, status, p.assigneeAgentId ?? null, ts, ts);
+
+  db.prepare(
+    "insert into task_events (id, task_id, event_type, payload_json, ts) values (?, ?, ?, ?, ?)"
+  ).run(crypto.randomUUID(), id, "created", JSON.stringify(p), ts);
+
+  logActivity({
+    kind: "task",
+    title: `Task created: ${p.title}`,
+    detail: p.description,
+    actor: p.assigneeAgentId,
+    dept: p.dept,
+  });
+
+  res.status(201).json({ ok: true, id });
+});
+
+app.patch("/api/tasks/:id", (req, res) => {
+  const id = req.params.id;
+  const p = req.body as {
+    title?: string;
+    description?: string;
+    dept?: string;
+    status?: string;
+    assigneeAgentId?: string | null;
+    blockers?: string | null;
+  };
+
+  const existing = db.prepare("select * from tasks where id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
+  if (!existing) return res.status(404).json({ error: "task not found" });
+
+  const next = {
+    title: p.title ?? (existing.title as string),
+    description: p.description ?? (existing.description as string | null),
+    dept: p.dept ?? (existing.dept as string),
+    status: p.status ?? (existing.status as string),
+    assigneeAgentId:
+      p.assigneeAgentId === undefined
+        ? (existing.assignee_agent_id as string | null)
+        : p.assigneeAgentId,
+    blockers:
+      p.blockers === undefined
+        ? (existing.blockers as string | null)
+        : p.blockers,
+  };
+
+  const ts = nowIso();
+  db.prepare(
+    `update tasks
+     set title=?, description=?, dept=?, status=?, assignee_agent_id=?, blockers=?, updated_at=?
+     where id=?`
+  ).run(
+    next.title,
+    next.description,
+    next.dept,
+    next.status,
+    next.assigneeAgentId,
+    next.blockers,
+    ts,
+    id
+  );
+
+  db.prepare(
+    "insert into task_events (id, task_id, event_type, payload_json, ts) values (?, ?, ?, ?, ?)"
+  ).run(crypto.randomUUID(), id, "updated", JSON.stringify(p), ts);
+
+  logActivity({
+    kind: "task",
+    title: `Task updated: ${next.title}`,
+    detail: `Status ${next.status}`,
+    actor: next.assigneeAgentId ?? undefined,
+    dept: next.dept,
+  });
+
+  res.json({ ok: true });
+});
+
 app.post("/api/tasks/upsert", (req, res) => {
-  // expects a normalized payload from message parser (we'll wire later)
   const p = req.body as any;
   if (!p?.id || !p?.dept || !p?.title || !p?.status) {
     return res.status(400).json({ error: "missing required fields" });
   }
 
-  const now = new Date().toISOString();
+  const ts = nowIso();
   const existing = db.prepare("select id from tasks where id=?").get(p.id);
+
   if (!existing) {
     db.prepare(
-      `insert into tasks (id, dept, title, status, owner_agent, eta, blockers, approval_needed, approval_reason, created_at, updated_at, source_session, source_message)
-       values (@id, @dept, @title, @status, @owner_agent, @eta, @blockers, @approval_needed, @approval_reason, @created_at, @updated_at, @source_session, @source_message)`
+      `insert into tasks (id, dept, title, description, status, assignee_agent_id, owner_agent, eta, blockers, approval_needed, approval_reason, created_at, updated_at, source_session, source_message)
+       values (@id, @dept, @title, @description, @status, @assignee_agent_id, @owner_agent, @eta, @blockers, @approval_needed, @approval_reason, @created_at, @updated_at, @source_session, @source_message)`
     ).run({
       id: p.id,
       dept: p.dept,
       title: p.title,
+      description: p.description ?? null,
       status: p.status,
+      assignee_agent_id: p.assignee_agent_id ?? null,
       owner_agent: p.owner_agent ?? null,
       eta: p.eta ?? null,
       blockers: p.blockers ?? null,
       approval_needed:
         p.approval_needed === undefined ? null : p.approval_needed ? 1 : 0,
       approval_reason: p.approval_reason ?? null,
-      created_at: now,
-      updated_at: now,
+      created_at: ts,
+      updated_at: ts,
       source_session: p.source_session ?? null,
       source_message: p.source_message ?? null,
     });
   } else {
     db.prepare(
-      `update tasks set dept=@dept, title=@title, status=@status, owner_agent=@owner_agent, eta=@eta, blockers=@blockers,
+      `update tasks set dept=@dept, title=@title, description=@description, status=@status, assignee_agent_id=@assignee_agent_id, owner_agent=@owner_agent, eta=@eta, blockers=@blockers,
         approval_needed=@approval_needed, approval_reason=@approval_reason, updated_at=@updated_at,
-        source_session=@source_session, source_message=@source_message
-        where id=@id`
+        source_session=@source_session, source_message=@source_message where id=@id`
     ).run({
       id: p.id,
       dept: p.dept,
       title: p.title,
+      description: p.description ?? null,
       status: p.status,
+      assignee_agent_id: p.assignee_agent_id ?? null,
       owner_agent: p.owner_agent ?? null,
       eta: p.eta ?? null,
       blockers: p.blockers ?? null,
       approval_needed:
         p.approval_needed === undefined ? null : p.approval_needed ? 1 : 0,
       approval_reason: p.approval_reason ?? null,
-      updated_at: now,
+      updated_at: ts,
       source_session: p.source_session ?? null,
       source_message: p.source_message ?? null,
     });
   }
 
-  const eventId = crypto.randomUUID();
   db.prepare(
     "insert into task_events (id, task_id, event_type, payload_json, ts) values (?, ?, ?, ?, ?)"
-  ).run(eventId, p.id, "upsert", JSON.stringify(p), now);
+  ).run(crypto.randomUUID(), p.id, "upsert", JSON.stringify(p), ts);
+
+  logActivity({
+    kind: "task",
+    title: `Task upsert: ${p.title}`,
+    detail: p.status,
+    actor: p.assignee_agent_id,
+    dept: p.dept,
+  });
 
   res.json({ ok: true, id: p.id });
 });
 
+app.get("/api/content-drops", (_req, res) => {
+  const rows = db
+    .prepare("select * from content_drops order by created_at desc limit 200")
+    .all();
+  res.json({ contentDrops: rows });
+});
+
+app.post("/api/content-drops", (req, res) => {
+  const p = req.body as {
+    title?: string;
+    dept?: string;
+    agentId?: string;
+    contentType?: string;
+    contentPreview?: string;
+    link?: string;
+    status?: string;
+  };
+
+  if (!p?.title || !p?.dept || !p?.contentType) {
+    return res.status(400).json({ error: "title, dept, contentType required" });
+  }
+
+  db.prepare(
+    `insert into content_drops (id, title, dept, agent_id, content_type, content_preview, link, status, created_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    crypto.randomUUID(),
+    p.title,
+    p.dept,
+    p.agentId ?? null,
+    p.contentType,
+    p.contentPreview ?? null,
+    p.link ?? null,
+    p.status ?? "submitted",
+    nowIso()
+  );
+
+  logActivity({
+    kind: "content",
+    title: `Content drop: ${p.title}`,
+    detail: p.contentType,
+    actor: p.agentId,
+    dept: p.dept,
+  });
+
+  res.status(201).json({ ok: true });
+});
+
+app.get("/api/build-jobs", (_req, res) => {
+  const rows = db
+    .prepare("select * from build_jobs order by started_at desc limit 200")
+    .all();
+  res.json({ buildJobs: rows });
+});
+
+app.post("/api/build-jobs", (req, res) => {
+  const p = req.body as {
+    title?: string;
+    service?: string;
+    status?: string;
+    note?: string;
+    finishedAt?: string;
+  };
+
+  if (!p?.title || !p?.service || !p?.status) {
+    return res.status(400).json({ error: "title, service, status required" });
+  }
+
+  db.prepare(
+    `insert into build_jobs (id, title, service, status, started_at, finished_at, note)
+     values (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    crypto.randomUUID(),
+    p.title,
+    p.service,
+    p.status,
+    nowIso(),
+    p.finishedAt ?? null,
+    p.note ?? null
+  );
+
+  logActivity({
+    kind: "build",
+    title: `Build ${p.status}: ${p.title}`,
+    detail: p.note,
+  });
+
+  res.status(201).json({ ok: true });
+});
+
+app.get("/api/revenue", (_req, res) => {
+  const snapshots = db
+    .prepare("select * from revenue_snapshots order by captured_at desc limit 120")
+    .all() as { amount_usd: number }[];
+  const totalUsd = snapshots.reduce((sum, row) => sum + (row.amount_usd ?? 0), 0);
+  res.json({ snapshots, totalUsd });
+});
+
+app.post("/api/revenue", (req, res) => {
+  const p = req.body as { source?: string; amountUsd?: number; period?: string };
+  if (!p?.source || typeof p.amountUsd !== "number") {
+    return res.status(400).json({ error: "source and amountUsd required" });
+  }
+
+  db.prepare(
+    `insert into revenue_snapshots (id, source, amount_usd, period, captured_at)
+     values (?, ?, ?, ?, ?)`
+  ).run(crypto.randomUUID(), p.source, p.amountUsd, p.period ?? null, nowIso());
+
+  logActivity({
+    kind: "revenue",
+    title: `Revenue snapshot: $${p.amountUsd.toFixed(2)}`,
+    detail: p.source,
+  });
+
+  res.status(201).json({ ok: true });
+});
+
+app.get("/api/activity", (_req, res) => {
+  const rows = db
+    .prepare("select * from activity_events order by ts desc limit 300")
+    .all();
+  res.json({ activity: rows });
+});
+
 app.listen(env.PORT, () => {
   // eslint-disable-next-line no-console
-  console.log(`[mc-api] listening on http://127.0.0.1:${env.PORT} (CORS origin ${env.WEB_ORIGIN})`);
+  console.log(
+    `[mc-api] listening on http://127.0.0.1:${env.PORT} (CORS origin ${env.WEB_ORIGIN})`
+  );
 });

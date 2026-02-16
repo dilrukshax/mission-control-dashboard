@@ -17,69 +17,74 @@ export type Dept = z.infer<typeof Dept>;
 export const TaskStatus = z.enum(["todo", "in_progress", "blocked", "done"]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
-export const TaskUpdateBlock = z.object({
-  taskId: z.string().min(1),
+export const AgentStatus = z.enum(["active", "sleeping"]);
+export type AgentStatus = z.infer<typeof AgentStatus>;
+
+export const Task = z.object({
+  id: z.string(),
   dept: Dept,
+  title: z.string(),
+  description: z.string().nullable().optional(),
   status: TaskStatus,
-  title: z.string().min(1),
-  ownerAgent: z.string().min(1).optional(),
-  eta: z.string().min(1).optional(),
-  blockers: z.string().min(1).optional(),
-  approvalNeeded: z.boolean().optional(),
-  approvalReason: z.string().min(1).optional(),
-  source: z
-    .object({
-      sessionKey: z.string().optional(),
-      messageId: z.string().optional(),
-    })
-    .optional(),
+  assignee_agent_id: z.string().nullable().optional(),
+  updated_at: z.string(),
+  created_at: z.string(),
 });
-export type TaskUpdateBlock = z.infer<typeof TaskUpdateBlock>;
+export type Task = z.infer<typeof Task>;
 
-// Parse a strict machine-readable block from plain text.
-// Expected format (one per line):
-// TASK_ID: ...
-// DEPT: ...
-// STATUS: ...
-// TITLE: ...
-// OWNER_AGENT: ... (optional)
-// ETA: ... (optional)
-// BLOCKERS: ... (optional)
-// APPROVAL_NEEDED: yes|no (optional)
-// APPROVAL_REASON: ... (optional)
-export function parseTaskUpdateBlock(text: string): TaskUpdateBlock | null {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+export const Agent = z.object({
+  id: z.string(),
+  name: z.string(),
+  role: z.string(),
+  dept: Dept,
+  current_status: AgentStatus.nullable().optional(),
+  current_task: z.string().nullable().optional(),
+  previous_task: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+  last_checkin_at: z.string().nullable().optional(),
+});
+export type Agent = z.infer<typeof Agent>;
 
-  const kv: Record<string, string> = {};
-  for (const line of lines) {
-    const m = line.match(/^([A-Z0-9_]+)\s*:\s*(.+)$/);
-    if (!m) continue;
-    kv[m[1]] = m[2];
-  }
+export const ContentDrop = z.object({
+  id: z.string(),
+  title: z.string(),
+  dept: Dept,
+  agent_id: z.string().nullable().optional(),
+  content_type: z.string(),
+  content_preview: z.string().nullable().optional(),
+  link: z.string().nullable().optional(),
+  status: z.string(),
+  created_at: z.string(),
+});
+export type ContentDrop = z.infer<typeof ContentDrop>;
 
-  if (!kv.TASK_ID || !kv.DEPT || !kv.STATUS || !kv.TITLE) return null;
+export const BuildJob = z.object({
+  id: z.string(),
+  title: z.string(),
+  service: z.string(),
+  status: z.string(),
+  started_at: z.string(),
+  finished_at: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+});
+export type BuildJob = z.infer<typeof BuildJob>;
 
-  const approvalNeeded =
-    kv.APPROVAL_NEEDED?.toLowerCase() === "yes"
-      ? true
-      : kv.APPROVAL_NEEDED?.toLowerCase() === "no"
-        ? false
-        : undefined;
+export const RevenueSnapshot = z.object({
+  id: z.string(),
+  source: z.string(),
+  amount_usd: z.number(),
+  period: z.string().nullable().optional(),
+  captured_at: z.string(),
+});
+export type RevenueSnapshot = z.infer<typeof RevenueSnapshot>;
 
-  const parsed = TaskUpdateBlock.safeParse({
-    taskId: kv.TASK_ID,
-    dept: kv.DEPT,
-    status: kv.STATUS,
-    title: kv.TITLE,
-    ownerAgent: kv.OWNER_AGENT,
-    eta: kv.ETA,
-    blockers: kv.BLOCKERS,
-    approvalNeeded,
-    approvalReason: kv.APPROVAL_REASON,
-  });
-
-  return parsed.success ? parsed.data : null;
-}
+export const ActivityEvent = z.object({
+  id: z.string(),
+  kind: z.string(),
+  title: z.string(),
+  detail: z.string().nullable().optional(),
+  actor: z.string().nullable().optional(),
+  dept: z.string().nullable().optional(),
+  ts: z.string(),
+});
+export type ActivityEvent = z.infer<typeof ActivityEvent>;
