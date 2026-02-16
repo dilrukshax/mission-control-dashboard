@@ -46,6 +46,63 @@ function slugify(value: string) {
     .slice(0, 80);
 }
 
+function getMarkdownFiles(rootDir: string): string[] {
+  const out: string[] = [];
+
+  function walk(current: string) {
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const full = path.join(current, e.name);
+      if (e.isDirectory()) {
+        walk(full);
+      } else if (e.isFile() && e.name.toLowerCase().endsWith(".md")) {
+        out.push(full);
+      }
+    }
+  }
+
+  if (fs.existsSync(rootDir)) walk(rootDir);
+  return out;
+}
+
+function scoreText(content: string, query: string): number {
+  const q = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 1);
+
+  const body = content.toLowerCase();
+  let score = 0;
+  for (const token of q) {
+    let idx = body.indexOf(token);
+    while (idx !== -1) {
+      score += 1;
+      idx = body.indexOf(token, idx + token.length);
+    }
+  }
+  return score;
+}
+
+function summarizeMatch(content: string, query: string): string {
+  const lower = content.toLowerCase();
+  const token = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .find((s) => s.length > 1);
+
+  const idx = token ? lower.indexOf(token) : -1;
+  if (idx === -1) {
+    return content.replace(/\s+/g, " ").slice(0, 220);
+  }
+
+  const start = Math.max(0, idx - 120);
+  const end = Math.min(content.length, idx + 180);
+  return content.slice(start, end).replace(/\s+/g, " ");
+}
+
 type StreamEvent = {
   id: string;
   kind: string;
@@ -359,6 +416,169 @@ app.post("/api/research/intake", requireRole("operator"), (req, res) => {
     taskId,
     assignee,
     notePath: relPath,
+  });
+});
+
+app.get("/api/research/search", requireRole("viewer"), (req, res) => {
+  const q = req.query.q?.toString().trim();
+  if (!q) return res.status(400).json({ error: "q is required" });
+
+  const researchRoot = path.join(env.OBSIDIAN_COMPANY_ROOT, "01-Market");
+  const files = getMarkdownFiles(researchRoot);
+
+  const matches = files
+    .map((file) => {
+      const content = fs.readFileSync(file, "utf8");
+      const score = scoreText(content, q);
+      const relPath = path.relative(env.OBSIDIAN_COMPANY_ROOT, file);
+      return {
+        path: relPath,
+        score,
+        snippet: summarizeMatch(content, q),
+      };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+
+  res.json({ query: q, matches });
+});
+
+app.post("/api/research/answer", requireRole("viewer"), (req, res) => {
+  const p = req.body as { query?: string };
+  const query = p.query?.trim();
+  if (!query) return res.status(400).json({ error: "query is required" });
+
+  const researchRoot = path.join(env.OBSIDIAN_COMPANY_ROOT, "01-Market");
+  const files = getMarkdownFiles(researchRoot);
+
+  const ranked = files
+    .map((file) => {
+      const content = fs.readFileSync(file, "utf8");
+      const score = scoreText(content, query);
+      return {
+        file,
+        relPath: path.relative(env.OBSIDIAN_COMPANY_ROOT, file),
+        score,
+        snippet: summarizeMatch(content, query),
+      };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+
+  if (ranked.length === 0) {
+    return res.json({
+      answer: "No prior research note matched this query.",
+      sources: [],
+    });
+  }
+
+  const answer = [
+    `Based on prior research notes, I found ${ranked.length} relevant source(s):`,
+    ...ranked.map((r, i) => `${i + 1}. ${r.relPath} — ${r.snippet}`),
+  ].join("\n");
+
+  res.json({
+    answer,
+    sources: ranked.map((r) => ({ path: r.relPath, score: r.score })),
+  });
+});
+
+app.post("/api/discord/research-message", requireRole("operator"), (req, res) => {
+  const p = req.body as {
+    channel?: string;
+    text?: string;
+    requester?: string;
+  };
+
+  if (!p.text?.trim()) {
+    return res.status(400).json({ error: "text is required" });
+  }
+
+  const text = p.text.trim();
+  const createPrefix = /^research\s*:\s*/i;
+
+  if (createPrefix.test(text)) {
+    const topic = text.replace(createPrefix, "").trim();
+    if (!topic) return res.status(400).json({ error: "research topic missing" });
+
+    const ts = nowIso();
+    const taskId = crypto.randomUUID();
+    const assignee = "scout";
+    const title = `Research: ${topic}`;
+    const description = [
+      `Market: unspecified`,
+      `Output needed: summary with sources and recommendation`,
+      p.requester ? `Requester: ${p.requester}` : null,
+      p.channel ? `Channel: ${p.channel}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    db.prepare(
+      `insert into tasks (
+        id, dept, title, description, status, assignee_agent_id,
+        created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(taskId, "research-intel", title, description, "todo", assignee, ts, ts);
+
+    const date = dateOnly();
+    const fileName = `${date} - ${slugify(topic)}.md`;
+    const relPath = path.join("01-Market", "Research Requests", fileName);
+    const absPath = path.join(env.OBSIDIAN_COMPANY_ROOT, relPath);
+    fs.mkdirSync(path.dirname(absPath), { recursive: true });
+
+    const note = `# Research Request - ${topic}\n\n## Brief\n- Topic: ${topic}\n- Market: TBD\n- Output Needed: summary with sources and recommendation\n- Requester: ${p.requester ?? "unknown"}\n- Task ID: ${taskId}\n\n## Notes\n- \n`;
+    fs.writeFileSync(absPath, note, "utf8");
+
+    logActivity({
+      kind: "research",
+      title: `Discord research intake: ${topic}`,
+      detail: p.channel,
+      actor: assignee,
+      dept: "research-intel",
+    });
+    pushEvent("research.intake", topic);
+
+    return res.status(201).json({
+      mode: "intake",
+      taskId,
+      notePath: relPath,
+      message: `Created research task and note for: ${topic}`,
+    });
+  }
+
+  const researchRoot = path.join(env.OBSIDIAN_COMPANY_ROOT, "01-Market");
+  const files = getMarkdownFiles(researchRoot);
+  const ranked = files
+    .map((file) => {
+      const content = fs.readFileSync(file, "utf8");
+      const score = scoreText(content, text);
+      return {
+        relPath: path.relative(env.OBSIDIAN_COMPANY_ROOT, file),
+        score,
+        snippet: summarizeMatch(content, text),
+      };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  if (ranked.length === 0) {
+    return res.json({
+      mode: "lookup",
+      answer: "No prior research found for this query.",
+      sources: [],
+    });
+  }
+
+  return res.json({
+    mode: "lookup",
+    answer: ranked
+      .map((r, i) => `${i + 1}. ${r.relPath} — ${r.snippet}`)
+      .join("\n"),
+    sources: ranked.map((r) => r.relPath),
   });
 });
 
