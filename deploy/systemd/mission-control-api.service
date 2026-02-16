@@ -1,0 +1,21 @@
+[Unit]
+Description=Mission Control API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/dilan/mission-control-dashboard
+ExecStart=/home/dilan/mission-control-dashboard/scripts/prod/start-api.sh
+Restart=always
+RestartSec=3
+
+# Hardening (lightweight)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/home/dilan/mission-control-dashboard /home/dilan/note /home/dilan/.openclaw/mission-control
+
+[Install]
+WantedBy=default.target
