@@ -43,7 +43,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
                 <Bot className="h-3 w-3" />
                 <span className="truncate">{agent.role}</span>
                 <span className="text-border">·</span>
-                <span className="truncate">{agent.dept}</span>
+                <span className="truncate">general</span>
               </div>
             </div>
           </div>

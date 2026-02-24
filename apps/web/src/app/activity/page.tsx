@@ -68,8 +68,7 @@ export default async function ActivityPage() {
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className="text-[10px]">{e.kind}</Badge>
                         {e.actor && <Badge variant="secondary" className="text-[10px]">{e.actor}</Badge>}
-                        {e.dept && <Badge variant="secondary" className="text-[10px]">{e.dept}</Badge>}
-                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                           <Clock className="h-3 w-3" />
                           {timeAgo(e.ts)}
                         </span>

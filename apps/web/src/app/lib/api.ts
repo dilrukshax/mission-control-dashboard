@@ -2,7 +2,7 @@ export type Agent = {
   id: string;
   name: string;
   role: string;
-  dept: string;
+  dept?: string;
   current_status?: "active" | "sleeping" | null;
   current_task?: string | null;
   previous_task?: string | null;
@@ -12,7 +12,7 @@ export type Agent = {
 
 export type Task = {
   id: string;
-  dept: string;
+  dept?: string;
   title: string;
   description?: string | null;
   status: string;
@@ -31,7 +31,7 @@ export type Task = {
 export type ContentDrop = {
   id: string;
   title: string;
-  dept: string;
+  dept?: string;
   agent_id?: string | null;
   content_type: string;
   content_preview?: string | null;
@@ -185,10 +185,8 @@ export async function fetchAgents(): Promise<Agent[]> {
   return data.agents ?? [];
 }
 
-export async function fetchTasks(dept?: string): Promise<Task[]> {
-  const url = new URL(`${apiBase()}/api/tasks`);
-  if (dept) url.searchParams.set("dept", dept);
-  const res = await fetch(url, { cache: "no-store", headers: authHeaders() });
+export async function fetchTasks(): Promise<Task[]> {
+  const res = await fetch(`${apiBase()}/api/tasks`, { cache: "no-store", headers: authHeaders() });
   if (!res.ok) return [];
   const data = (await res.json()) as { tasks: Task[] };
   return data.tasks ?? [];
@@ -223,7 +221,7 @@ export async function fetchSystemNetworkUsage(): Promise<SystemNetworkUsage> {
 
 export type MemoryNote = {
   id: string;
-  dept: string;
+  dept?: string;
   agent_id?: string | null;
   note: string;
   created_at: string;
@@ -301,7 +299,7 @@ export type Board = {
   id: string;
   name: string;
   slug: string;
-  dept: string;
+  dept?: string;
   owner_agent: string | null;
   status: string;
   created_at: string;
@@ -320,7 +318,7 @@ export type BoardColumn = {
 
 export type BoardTask = {
   id: string;
-  dept: string;
+  dept?: string;
   title: string;
   description: string | null;
   status: string;

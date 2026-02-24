@@ -21,7 +21,7 @@ export default async function BoardsPage() {
                 <div>
                     <h1 className="text-[26px] font-bold tracking-tight leading-tight">Boards</h1>
                     <p className="mt-1.5 text-sm text-muted-foreground">
-                        Kanban boards for task tracking across departments
+                        Kanban boards for task tracking across the workspace
                     </p>
                 </div>
             </div>
@@ -52,7 +52,7 @@ export default async function BoardsPage() {
                                     </CardHeader>
                                     <CardContent>
                                         <p className="text-xs text-muted-foreground mb-2">
-                                            {board.dept} · {totalTasks} tasks
+                                            {totalTasks} tasks
                                         </p>
 
                                         {/* Mini column bar */}

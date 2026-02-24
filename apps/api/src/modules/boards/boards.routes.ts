@@ -22,11 +22,8 @@ export function boardRoutes(
     const router = Router();
 
     // ── List boards ──
-    router.get("/api/boards", auth.requireRole("viewer"), (req, res) => {
-        const dept = req.query.dept?.toString();
-        const rows = dept
-            ? db.prepare("select * from boards where dept = ? order by updated_at desc").all(dept)
-            : db.prepare("select * from boards order by updated_at desc").all();
+    router.get("/api/boards", auth.requireRole("viewer"), (_req, res) => {
+        const rows = db.prepare("select * from boards order by updated_at desc").all();
 
         // Attach column counts
         const boards = (rows as Array<Record<string, unknown>>).map((board) => {
@@ -45,18 +42,19 @@ export function boardRoutes(
     // ── Create board ──
     router.post("/api/boards", auth.requireRole("operator"), (req, res) => {
         const p = req.body as { name?: string; dept?: string; ownerAgent?: string };
-        if (!p.name || !p.dept) {
-            return res.status(400).json({ error: "name and dept are required" });
+        if (!p.name) {
+            return res.status(400).json({ error: "name is required" });
         }
 
         const id = crypto.randomUUID();
         const slug = slugify(p.name);
         const ts = nowIso();
+        const dept = p.dept ?? "general";
 
         db.prepare(
             `insert into boards (id, name, slug, dept, owner_agent, status, created_at, updated_at)
        values (?, ?, ?, ?, ?, 'active', ?, ?)`
-        ).run(id, p.name, slug, p.dept, p.ownerAgent ?? null, ts, ts);
+        ).run(id, p.name, slug, dept, p.ownerAgent ?? null, ts, ts);
 
         // Create default columns
         for (const col of DEFAULT_COLUMNS) {
@@ -65,7 +63,7 @@ export function boardRoutes(
             ).run(crypto.randomUUID(), id, col.key, col.title, col.position);
         }
 
-        logActivity({ kind: "board", title: `Board created: ${p.name}`, dept: p.dept });
+        logActivity({ kind: "board", title: `Board created: ${p.name}` });
         pushEvent("board.created", p.name);
         res.status(201).json({ ok: true, id, slug });
     });

@@ -21,19 +21,6 @@ const API_KEY = process.env.NEXT_PUBLIC_MC_API_KEY;
 const ROLE = process.env.NEXT_PUBLIC_MC_ROLE ?? "owner";
 const CAN_WRITE = ROLE === "owner" || ROLE === "operator";
 
-const DEPARTMENTS = [
-  "mission-control",
-  "eng-platform",
-  "eng-delivery",
-  "research-intel",
-  "product-strategy",
-  "marketing-growth",
-  "sales-enable",
-  "ops-reliability",
-  "finance-ops",
-  "legal-policy",
-] as const;
-
 function authHeaders(): HeadersInit {
   return API_KEY ? { "x-mc-key": API_KEY } : {};
 }
@@ -68,7 +55,6 @@ export function QuickTaskForm() {
         body: JSON.stringify({
           title: fd.get("title"),
           description: fd.get("description") || undefined,
-          dept: fd.get("dept"),
           assigneeAgentId: fd.get("assigneeAgentId") || undefined,
         }),
       });
@@ -102,21 +88,6 @@ export function QuickTaskForm() {
             <Input id="task-desc" name="description" placeholder="Optional description" />
           </div>
           <div className="space-y-1.5">
-            <Label>Department</Label>
-            <Select name="dept" required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select department" />
-              </SelectTrigger>
-              <SelectContent>
-                {DEPARTMENTS.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
             <Label htmlFor="task-assignee">Assignee Agent ID</Label>
             <Input id="task-assignee" name="assigneeAgentId" placeholder="Optional" />
           </div>
@@ -147,7 +118,6 @@ export function QuickContentDropForm() {
         headers: { "content-type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           title: fd.get("title"),
-          dept: fd.get("dept"),
           agentId: fd.get("agentId") || undefined,
           contentType: fd.get("contentType"),
           contentPreview: fd.get("contentPreview") || undefined,
@@ -178,19 +148,6 @@ export function QuickContentDropForm() {
           <div className="space-y-1.5">
             <Label>Title</Label>
             <Input name="title" required placeholder="Content title" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Department</Label>
-            <Select name="dept" required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select department" />
-              </SelectTrigger>
-              <SelectContent>
-                {DEPARTMENTS.map((d) => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           <div className="space-y-1.5">
             <Label>Agent ID</Label>

@@ -64,7 +64,7 @@ export default async function BoardDetailPage({
                         {board.name}
                     </h1>
                     <p className="mt-1.5 text-sm text-muted-foreground">
-                        {board.dept} · {tasks.length} tasks · Updated {timeAgo(board.updated_at)}
+                        {tasks.length} tasks · Updated {timeAgo(board.updated_at)}
                     </p>
                 </div>
                 <Badge variant={board.status === "active" ? "default" : "secondary"}>

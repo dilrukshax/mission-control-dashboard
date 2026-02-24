@@ -26,7 +26,7 @@ function statusConfig(status: string) {
   }
 }
 
-export function TaskTable({ tasks, showDept = true }: { tasks: Task[]; showDept?: boolean }) {
+export function TaskTable({ tasks }: { tasks: Task[] }) {
   if (tasks.length === 0) {
     return (
       <Card className="flex flex-col items-center justify-center py-12 text-center">
@@ -41,7 +41,6 @@ export function TaskTable({ tasks, showDept = true }: { tasks: Task[]; showDept?
       <Table>
         <TableHeader>
           <TableRow>
-            {showDept && <TableHead className="w-[140px]">Department</TableHead>}
             <TableHead>Title</TableHead>
             <TableHead className="w-[120px]">Status</TableHead>
             <TableHead className="w-[140px]">Assignee</TableHead>
@@ -54,13 +53,6 @@ export function TaskTable({ tasks, showDept = true }: { tasks: Task[]; showDept?
             const StatusIcon = sc.icon;
             return (
               <TableRow key={t.id}>
-                {showDept && (
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs font-normal">
-                      {t.dept}
-                    </Badge>
-                  </TableCell>
-                )}
                 <TableCell>
                   <div className="font-medium">{t.title}</div>
                   {t.description && (

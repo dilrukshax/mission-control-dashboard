@@ -54,24 +54,25 @@ export function agentRoutes(
 
     router.post("/api/agents/upsert", auth.requireRole("operator"), (req, res) => {
         const p = req.body as { id?: string; name?: string; role?: string; dept?: string };
-        if (!p.id || !p.name || !p.dept) {
-            return res.status(400).json({ error: "id, name, dept are required" });
+        if (!p.id || !p.name) {
+            return res.status(400).json({ error: "id and name are required" });
         }
 
         const ts = nowIso();
+        const dept = p.dept ?? "general";
         db.prepare(
             `insert into agents (id, name, role, dept, created_at, updated_at)
        values (?, ?, ?, ?, ?, ?)
        on conflict(id) do update set name=excluded.name, role=excluded.role, dept=excluded.dept, updated_at=excluded.updated_at`
-        ).run(p.id, p.name, p.role ?? "Team", p.dept, ts, ts);
+        ).run(p.id, p.name, p.role ?? "Team", dept, ts, ts);
 
-        logActivity({ kind: "agent", title: `Agent upsert: ${p.name}`, dept: p.dept, actor: p.id });
+        logActivity({ kind: "agent", title: `Agent upsert: ${p.name}`, actor: p.id });
         pushEvent("agent.upsert", p.name);
         res.json({ ok: true, id: p.id });
     });
 
     router.post("/api/agents/replace", auth.requireRole("operator"), (req, res) => {
-        const p = req.body as { agents?: Array<{ id: string; name: string; role?: string; dept: string }> };
+        const p = req.body as { agents?: Array<{ id: string; name: string; role?: string; dept?: string }> };
         if (!Array.isArray(p.agents)) {
             return res.status(400).json({ error: "agents array is required" });
         }
@@ -83,7 +84,7 @@ export function agentRoutes(
                 `insert into agents (id, name, role, dept, created_at, updated_at) values (?, ?, ?, ?, ?, ?)`
             );
             for (const a of p.agents!) {
-                ins.run(a.id, a.name, a.role ?? "Team", a.dept, ts, ts);
+                ins.run(a.id, a.name, a.role ?? "Team", a.dept ?? "general", ts, ts);
             }
         });
         tx();

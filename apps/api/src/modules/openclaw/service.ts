@@ -12,8 +12,8 @@ export function createOpenClawService(
 
         // Get local DB agents for cross-reference
         const localAgents = db
-            .prepare("select id, name, role, dept from agents")
-            .all() as Array<{ id: string; name: string; role: string; dept: string }>;
+            .prepare("select id, name, role from agents")
+            .all() as Array<{ id: string; name: string; role: string }>;
 
         const localMap = new Map(localAgents.map((a) => [a.id, a]));
 

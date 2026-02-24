@@ -11,7 +11,6 @@ import {
   DollarSign,
   Activity,
   Bot,
-  Building2,
   Server,
   Menu,
   X,
@@ -56,19 +55,6 @@ const SIDEBAR_SECTIONS = [
       { key: "agents", label: "Agents", href: "/agents", icon: Bot },
     ],
   },
-] as const;
-
-const DEPARTMENTS = [
-  "mission-control",
-  "eng-platform",
-  "eng-delivery",
-  "research-intel",
-  "product-strategy",
-  "marketing-growth",
-  "sales-enable",
-  "ops-reliability",
-  "finance-ops",
-  "legal-policy",
 ] as const;
 
 /* ── Section with dash toggle (like OpenClaw) ── */
@@ -181,18 +167,6 @@ export function AppSidebar() {
           </SidebarSection>
         ))}
 
-        <SidebarSection label="Departments">
-          {DEPARTMENTS.map((dept) => (
-            <NavItem
-              key={dept}
-              href={`/dept/${dept}`}
-              icon={Building2}
-              label={dept}
-              isActive={pathname === `/dept/${dept}`}
-              onClick={() => setMobileOpen(false)}
-            />
-          ))}
-        </SidebarSection>
       </div>
     </div>
   );

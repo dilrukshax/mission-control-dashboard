@@ -20,16 +20,16 @@ export function contentRoutes(
     });
 
     router.post("/api/content-drops", auth.requireRole("operator"), (req, res) => {
-        const p = req.body as { title?: string; dept?: string; agentId?: string; contentType?: string; contentPreview?: string; link?: string; status?: string };
-        if (!p?.title || !p?.dept || !p?.contentType) {
-            return res.status(400).json({ error: "title, dept, contentType required" });
+        const p = req.body as { title?: string; agentId?: string; contentType?: string; contentPreview?: string; link?: string; status?: string };
+        if (!p?.title || !p?.contentType) {
+            return res.status(400).json({ error: "title and contentType required" });
         }
         db.prepare(
             `insert into content_drops (id, title, dept, agent_id, content_type, content_preview, link, status, created_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(crypto.randomUUID(), p.title, p.dept, p.agentId ?? null, p.contentType, p.contentPreview ?? null, p.link ?? null, p.status ?? "submitted", nowIso());
+        ).run(crypto.randomUUID(), p.title, "general", p.agentId ?? null, p.contentType, p.contentPreview ?? null, p.link ?? null, p.status ?? "submitted", nowIso());
 
-        logActivity({ kind: "content", title: `Content drop: ${p.title}`, detail: p.contentType, actor: p.agentId, dept: p.dept });
+        logActivity({ kind: "content", title: `Content drop: ${p.title}`, detail: p.contentType, actor: p.agentId });
         pushEvent("content.created", p.title);
         res.status(201).json({ ok: true });
     });

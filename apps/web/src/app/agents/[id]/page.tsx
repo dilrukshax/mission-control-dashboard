@@ -13,8 +13,7 @@ import {
 } from "@/components/ui/table";
 import {
   Bot,
-  Building2,
-  Briefcase,
+    Briefcase,
   Brain,
   Clock,
   ArrowLeft,
@@ -107,10 +106,6 @@ export default async function AgentDetailPage({
                   {agent.role}
                 </span>
                 <span className="flex items-center gap-1">
-                  <Building2 className="h-4 w-4" />
-                  {agent.dept}
-                </span>
-                <span className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
                   {agent.last_checkin_at
                     ? `Last check-in ${timeAgo(agent.last_checkin_at)}`
@@ -168,7 +163,6 @@ export default async function AgentDetailPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>Title</TableHead>
-                  <TableHead className="w-[100px]">Dept</TableHead>
                   <TableHead className="w-[120px]">Status</TableHead>
                   <TableHead className="w-[100px] text-right">Updated</TableHead>
                 </TableRow>
@@ -183,9 +177,6 @@ export default async function AgentDetailPage({
                         {t.description && (
                           <div className="line-clamp-1 text-xs text-muted-foreground">{t.description}</div>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">{t.dept}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -234,7 +225,6 @@ export default async function AgentDetailPage({
                   <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {formatDate(note.created_at)}
-                    <Badge variant="outline" className="text-[10px]">{note.dept}</Badge>
                   </div>
                 </div>
               ))}

@@ -22,7 +22,7 @@ export default async function TasksPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[26px] font-bold tracking-tight leading-tight">Tasks</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">Manage and track all tasks across departments</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">Manage and track all tasks across the workspace</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

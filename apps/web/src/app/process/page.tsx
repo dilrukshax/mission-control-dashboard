@@ -27,7 +27,7 @@ export default async function ProcessPage() {
                     Ongoing Process
                 </h1>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                    Real-time view of all active tasks across boards and departments
+                    Real-time view of all active tasks across all boards
                 </p>
             </div>
 
@@ -106,7 +106,6 @@ export default async function ProcessPage() {
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-medium truncate">{task.title}</p>
                                             <p className="text-xs text-muted-foreground">
-                                                {task.dept}
                                                 {task.assignee_agent_id ? ` · ${task.assignee_agent_id}` : null}
                                                 {typeof (task as Record<string, unknown>).board_name === "string" ? ` · ${(task as Record<string, unknown>).board_name as string}` : null}
                                             </p>

@@ -44,8 +44,7 @@ export default async function ContentPage() {
                     <TableRow>
                       <TableHead>Title</TableHead>
                       <TableHead className="w-[100px]">Type</TableHead>
-                      <TableHead className="w-[120px]">Dept</TableHead>
-                      <TableHead className="w-[100px]">Status</TableHead>
+                                            <TableHead className="w-[100px]">Status</TableHead>
                       <TableHead className="w-[100px] text-right">Created</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -69,9 +68,6 @@ export default async function ContentPage() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{item.content_type}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">{item.dept}</Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant={item.status === "published" ? "success" : "secondary"} className="text-xs">
