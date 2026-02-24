@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
   ListTodo,
   FileText,
   Hammer,
@@ -19,19 +18,27 @@ import {
   Kanban,
   Workflow,
   Zap,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-// ScrollArea removed — using plain overflow with hidden scrollbar
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useState } from "react";
 
-/* ── Sidebar sections matching OpenClaw structure ── */
+/* ── 3 clean sections ── */
 const SIDEBAR_SECTIONS = [
   {
-    label: "Overview",
+    label: "Work",
     items: [
-      { key: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { key: "queue", label: "Work Queue", href: "/", icon: Inbox },
+      { key: "boards", label: "Boards", href: "/boards", icon: Kanban },
+      { key: "tasks", label: "Tasks", href: "/tasks", icon: ListTodo },
+      { key: "activations", label: "Activations", href: "/activations", icon: Zap },
+    ],
+  },
+  {
+    label: "Monitor",
+    items: [
       { key: "system", label: "System", href: "/system", icon: Server },
       { key: "gateway", label: "Gateway", href: "/gateway", icon: Unplug },
       { key: "process", label: "Process", href: "/process", icon: Workflow },
@@ -39,25 +46,18 @@ const SIDEBAR_SECTIONS = [
     ],
   },
   {
-    label: "Operations",
+    label: "Data",
+    defaultOpen: false,
     items: [
-      { key: "boards", label: "Boards", href: "/boards", icon: Kanban },
-      { key: "tasks", label: "Tasks", href: "/tasks", icon: ListTodo },
+      { key: "agents", label: "Agents", href: "/agents", icon: Bot },
       { key: "builds", label: "Builds", href: "/builds", icon: Hammer },
       { key: "content", label: "Content", href: "/content", icon: FileText },
       { key: "revenue", label: "Revenue", href: "/revenue", icon: DollarSign },
-      { key: "activations", label: "Activations", href: "/activations", icon: Zap },
-    ],
-  },
-  {
-    label: "Agent",
-    items: [
-      { key: "agents", label: "Agents", href: "/agents", icon: Bot },
     ],
   },
 ] as const;
 
-/* ── Section with dash toggle (like OpenClaw) ── */
+/* ── Section with dash toggle ── */
 function SidebarSection({
   label,
   children,
@@ -82,7 +82,7 @@ function SidebarSection({
   );
 }
 
-/* ── Nav item matching OpenClaw: subtle red bg when active, red icon ── */
+/* ── Nav item ── */
 function NavItem({
   href,
   icon: Icon,
@@ -153,7 +153,11 @@ export function AppSidebar() {
       {/* ── Nav ── */}
       <div className="flex-1 overflow-y-auto px-3 py-4 sidebar-scroll">
         {SIDEBAR_SECTIONS.map((section) => (
-          <SidebarSection key={section.label} label={section.label}>
+          <SidebarSection
+            key={section.label}
+            label={section.label}
+            defaultOpen={"defaultOpen" in section ? section.defaultOpen : true}
+          >
             {section.items.map((item) => (
               <NavItem
                 key={item.key}
@@ -166,7 +170,6 @@ export function AppSidebar() {
             ))}
           </SidebarSection>
         ))}
-
       </div>
     </div>
   );
@@ -214,7 +217,7 @@ export function AppSidebar() {
   );
 }
 
-/* ── Health badge (matching OpenClaw top-right) ── */
+/* ── Health badge ── */
 export function HealthBadge() {
   return (
     <div className="flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium">

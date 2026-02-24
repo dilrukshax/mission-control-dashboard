@@ -18,6 +18,7 @@ import { openclawRoutes } from "./modules/openclaw/routes.js";
 import { createWorkflowService } from "./modules/workflow/workflow.service.js";
 import { boardRoutes } from "./modules/boards/boards.routes.js";
 import { activationRoutes } from "./modules/activations/activations.routes.js";
+import { workflowRoutes } from "./modules/workflow/workflow.routes.js";
 
 // ── Bootstrap ──────────────────────────────────────────
 const env = getEnv();
@@ -56,13 +57,14 @@ app.get("/api/auth/me", (req, res) => {
 // ── Module routers ─────────────────────────────────────
 app.use(systemRoutes(system, auth));
 app.use(agentRoutes(db, auth, logActivity));
-app.use(taskRoutes(db, auth, logActivity, workflow));
+app.use(taskRoutes(db, auth, logActivity));
 app.use(contentRoutes(db, auth, logActivity));
 app.use(researchRoutes(db, env, auth, logActivity));
 app.use(discordRoutes(db, env, auth, logActivity));
 app.use(openclawRoutes(auth, openclawService));
 app.use(boardRoutes(db, auth, logActivity));
 app.use(activationRoutes(db, auth, logActivity));
+app.use(workflowRoutes(db, auth, workflow));
 
 // ── Start ──────────────────────────────────────────────
 app.listen(env.PORT, () => {

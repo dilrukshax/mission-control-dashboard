@@ -1,4 +1,4 @@
-import { fetchOngoingProcess } from "../lib/api";
+import { fetchProcessStats, fetchOngoingProcess } from "../lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
@@ -10,24 +10,18 @@ const COLUMN_LABELS: Record<string, string> = {
     review: "Review",
 };
 
-const COLUMN_ICONS: Record<string, string> = {
-    todo: "📋",
-    in_progress: "🔧",
-    blocked: "🚫",
-    review: "👀",
-};
-
 export default async function ProcessPage() {
-    const process = await fetchOngoingProcess();
+    const [stats, ongoing] = await Promise.all([
+        fetchProcessStats(),
+        fetchOngoingProcess(),
+    ]);
 
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-[26px] font-bold tracking-tight leading-tight">
-                    Ongoing Process
-                </h1>
+                <h1 className="text-[26px] font-bold tracking-tight leading-tight">Process</h1>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                    Real-time view of all active tasks across all boards
+                    KPIs, bottlenecks, and operational health
                 </p>
             </div>
 
@@ -35,113 +29,109 @@ export default async function ProcessPage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Active</CardTitle>
+                        <CardTitle className="text-sm font-medium">Avg Cycle Time</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-3xl font-bold">{process.total}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">non-done tasks</p>
+                        <p className="text-3xl font-bold">
+                            {stats.avgCycleHours !== null ? `${stats.avgCycleHours}h` : "—"}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">start → done</p>
                     </CardContent>
                 </Card>
 
-                <Card className={process.blocked > 0 ? "border-red-500/40" : ""}>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Blocked</CardTitle>
-                        {process.blocked > 0 && (
-                            <Badge variant="destructive" className="text-[10px]">
-                                ⚠️ {process.blocked}
-                            </Badge>
+                        <CardTitle className="text-sm font-medium">Throughput</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                            {stats.throughputThisWeek}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">completed this week</p>
+                    </CardContent>
+                </Card>
+
+                <Card className={stats.staleInProgress > 0 ? "border-orange-500/40" : ""}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Stale Tasks</CardTitle>
+                        {stats.staleInProgress > 0 && (
+                            <Badge variant="destructive" className="text-[10px]">⚠️</Badge>
                         )}
                     </CardHeader>
                     <CardContent>
-                        <p className="text-3xl font-bold text-red-600 dark:text-red-400">
-                            {process.blocked}
+                        <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+                            {stats.staleInProgress}
                         </p>
-                        <p className="mt-1 text-xs text-muted-foreground">needs attention</p>
+                        <p className="mt-1 text-xs text-muted-foreground">in-progress &gt;24h no update</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                        <CardTitle className="text-sm font-medium">Automations</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                            {process.inProgress}
+                        <p className="text-3xl font-bold">
+                            <span className="text-emerald-600 dark:text-emerald-400">{stats.activations.successThisWeek}</span>
+                            <span className="text-muted-foreground mx-1">/</span>
+                            <span className="text-red-600 dark:text-red-400">{stats.activations.failedThisWeek}</span>
                         </p>
-                        <p className="mt-1 text-xs text-muted-foreground">currently active</p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">In Review</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                            {process.review}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">awaiting review</p>
+                        <p className="mt-1 text-xs text-muted-foreground">success / failed this week</p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* ── Tasks by Column ── */}
-            {Object.entries(process.byColumn).map(([column, tasks]) => (
-                <div key={column}>
-                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                        <span>{COLUMN_ICONS[column] ?? "📌"}</span>
-                        <span>{COLUMN_LABELS[column] ?? column}</span>
-                        <span className="text-sm font-normal text-muted-foreground">
-                            ({tasks.length})
-                        </span>
-                    </h2>
-                    <Card>
-                        <CardContent className="p-0">
-                            <div className="divide-y">
-                                {tasks.map((task) => (
-                                    <div
-                                        key={task.id}
-                                        className="flex items-center justify-between px-4 py-3"
-                                    >
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-medium truncate">{task.title}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {task.assignee_agent_id ? ` · ${task.assignee_agent_id}` : null}
-                                                {typeof (task as Record<string, unknown>).board_name === "string" ? ` · ${(task as Record<string, unknown>).board_name as string}` : null}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0 ml-4">
-                                            {task.priority > 0 && (
-                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                                                    P{task.priority}
-                                                </span>
-                                            )}
-                                            {task.due_at && (
-                                                <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                                                    Due {new Date(task.due_at).toLocaleDateString()}
-                                                </span>
-                                            )}
-                                            <span className="text-[11px] text-muted-foreground">
-                                                {timeAgo(task.updated_at)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
+            {/* ── Bottleneck ── */}
+            {stats.bottleneck && (
+                <Card className="border-amber-500/30">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">🔥</span>
+                            <div>
+                                <p className="text-sm font-semibold">
+                                    Bottleneck: <span className="text-amber-600 dark:text-amber-400">{COLUMN_LABELS[stats.bottleneck.column] ?? stats.bottleneck.column}</span>
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {stats.bottleneck.taskCount} tasks · avg {stats.bottleneck.avgHours}h dwell time
+                                </p>
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            ))}
-
-            {process.total === 0 && (
-                <Card>
-                    <CardContent className="py-12 text-center">
-                        <p className="text-sm text-muted-foreground">
-                            No ongoing tasks. All caught up! 🎉
-                        </p>
+                        </div>
                     </CardContent>
                 </Card>
             )}
+
+            {/* ── Ongoing by Status ── */}
+            <div>
+                <h2 className="text-lg font-semibold mb-3">Active Tasks by Status</h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {(["blocked", "in_progress", "review", "todo"] as const).map((status) => {
+                        const tasks = ongoing.byColumn[status] ?? [];
+                        return (
+                            <Card key={status}>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                        {COLUMN_LABELS[status]} ({tasks.length})
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                                    {tasks.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground/50 py-4 text-center">None</p>
+                                    ) : (
+                                        tasks.map((task) => (
+                                            <div key={task.id} className="text-xs p-2 rounded bg-muted/50">
+                                                <p className="font-medium truncate">{task.title}</p>
+                                                <p className="text-muted-foreground mt-0.5">
+                                                    {task.assignee_agent_id ?? "unassigned"} · {timeAgo(task.updated_at)}
+                                                </p>
+                                            </div>
+                                        ))
+                                    )}
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 }

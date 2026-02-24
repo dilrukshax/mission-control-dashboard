@@ -418,3 +418,41 @@ export async function fetchActivationRuns(): Promise<ActivationRun[]> {
   const data = await getJson<{ runs: ActivationRun[] }>("/api/activations/runs");
   return data.runs ?? [];
 }
+
+// ── Work Queue / Process Stats ─────────────────────────
+
+export type WorkQueueKpi = {
+  totalActive: number;
+  blocked: number;
+  overdue: number;
+  stale: number;
+  needsReview: number;
+};
+
+export type WorkQueue = {
+  kpi: WorkQueueKpi;
+  sections: {
+    blocked: BoardTask[];
+    needsReview: BoardTask[];
+    dueToday: BoardTask[];
+    unassigned: BoardTask[];
+    inProgress: BoardTask[];
+    stale: BoardTask[];
+  };
+};
+
+export type ProcessStats = {
+  avgCycleHours: number | null;
+  throughputThisWeek: number;
+  bottleneck: { column: string; taskCount: number; avgHours: number } | null;
+  staleInProgress: number;
+  activations: { successThisWeek: number; failedThisWeek: number };
+};
+
+export async function fetchWorkQueue(): Promise<WorkQueue> {
+  return getJson("/api/process/queue");
+}
+
+export async function fetchProcessStats(): Promise<ProcessStats> {
+  return getJson("/api/process/stats");
+}
