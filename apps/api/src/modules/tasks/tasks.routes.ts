@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import type Database from "better-sqlite3";
 import type { createAuth } from "../../lib/auth.js";
 import type { LogActivity } from "../agents/agents.routes.js";
+import type { WorkflowServiceInstance } from "../workflow/workflow.service.js";
 import { pushEvent } from "../../lib/sse.js";
 import { nowIso } from "../../lib/utils.js";
 
@@ -10,6 +11,7 @@ export function taskRoutes(
     db: Database.Database,
     auth: ReturnType<typeof createAuth>,
     logActivity: LogActivity,
+    workflow: WorkflowServiceInstance,
 ) {
     const router = Router();
 
@@ -121,6 +123,41 @@ export function taskRoutes(
         logActivity({ kind: "task", title: `Task upsert: ${p.title}`, detail: p.status, actor: p.assignee_agent_id, dept: p.dept });
         pushEvent("task.upsert", p.title);
         res.json({ ok: true, id: p.id });
+    });
+
+    // ── Workflow: Move task ──
+    router.patch("/api/tasks/:id/move", auth.requireRole("operator"), (req, res) => {
+        const p = req.body as { toStatus?: string; actor?: string; reason?: string; force?: boolean };
+        if (!p.toStatus) return res.status(400).json({ error: "toStatus is required" });
+
+        // Only owners can force-skip transitions
+        const role = auth.resolveRole(req);
+        if (p.force && role !== "owner") {
+            return res.status(403).json({ error: "only owners can force status transitions" });
+        }
+
+        const result = workflow.moveTask({
+            taskId: req.params.id,
+            toStatus: p.toStatus,
+            actor: p.actor,
+            reason: p.reason,
+            force: p.force,
+        });
+
+        if (!result.ok) return res.status(400).json({ error: result.error });
+        res.json({ ok: true, from: result.from, to: result.to });
+    });
+
+    // ── Workflow: Task timeline ──
+    router.get("/api/tasks/:id/timeline", auth.requireRole("viewer"), (req, res) => {
+        const timeline = workflow.getTaskTimeline(req.params.id);
+        res.json({ timeline });
+    });
+
+    // ── Process: Ongoing tasks ──
+    router.get("/api/process/ongoing", auth.requireRole("viewer"), (_req, res) => {
+        const ongoing = workflow.getOngoingProcess();
+        res.json(ongoing);
     });
 
     return router;

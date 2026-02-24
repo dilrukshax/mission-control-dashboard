@@ -295,3 +295,128 @@ export async function fetchOpenClawSessions(): Promise<OpenClawSession[]> {
   return data.sessions ?? [];
 }
 
+// ── Boards ─────────────────────────────────────────────
+
+export type Board = {
+  id: string;
+  name: string;
+  slug: string;
+  dept: string;
+  owner_agent: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  taskCounts: Record<string, number>;
+};
+
+export type BoardColumn = {
+  id: string;
+  board_id: string;
+  key: string;
+  title: string;
+  position: number;
+  wip_limit: number | null;
+};
+
+export type BoardTask = {
+  id: string;
+  dept: string;
+  title: string;
+  description: string | null;
+  status: string;
+  assignee_agent_id: string | null;
+  board_id: string | null;
+  column_key: string | null;
+  priority: number;
+  due_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function fetchBoards(): Promise<Board[]> {
+  const data = await getJson<{ boards: Board[] }>("/api/boards");
+  return data.boards ?? [];
+}
+
+export async function fetchBoardDetail(id: string): Promise<{
+  board: Board;
+  columns: BoardColumn[];
+}> {
+  return getJson(`/api/boards/${id}`);
+}
+
+export async function fetchBoardTasks(id: string): Promise<{
+  tasks: BoardTask[];
+  columns: BoardColumn[];
+}> {
+  return getJson(`/api/boards/${id}/tasks`);
+}
+
+// ── Process / Workflow ─────────────────────────────────
+
+export type OngoingProcess = {
+  total: number;
+  blocked: number;
+  inProgress: number;
+  review: number;
+  byColumn: Record<string, BoardTask[]>;
+  tasks: BoardTask[];
+};
+
+export type TimelineEntry = {
+  id: string;
+  type: "transition" | "event";
+  ts: string;
+  from?: string;
+  to?: string;
+  actor?: string;
+  detail?: string;
+  eventType?: string;
+  payload?: string;
+};
+
+export async function fetchOngoingProcess(): Promise<OngoingProcess> {
+  return getJson("/api/process/ongoing");
+}
+
+export async function fetchTaskTimeline(taskId: string): Promise<TimelineEntry[]> {
+  const data = await getJson<{ timeline: TimelineEntry[] }>(`/api/tasks/${taskId}/timeline`);
+  return data.timeline ?? [];
+}
+
+// ── Activations ────────────────────────────────────────
+
+export type Activation = {
+  id: string;
+  name: string;
+  trigger_type: string;
+  trigger_config_json: string;
+  action_type: string;
+  action_config_json: string;
+  enabled: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ActivationRun = {
+  id: string;
+  activation_id: string;
+  activation_name: string;
+  task_id: string | null;
+  status: string;
+  result_json: string | null;
+  error: string | null;
+  ts: string;
+};
+
+export async function fetchActivations(): Promise<Activation[]> {
+  const data = await getJson<{ activations: Activation[] }>("/api/activations");
+  return data.activations ?? [];
+}
+
+export async function fetchActivationRuns(): Promise<ActivationRun[]> {
+  const data = await getJson<{ runs: ActivationRun[] }>("/api/activations/runs");
+  return data.runs ?? [];
+}

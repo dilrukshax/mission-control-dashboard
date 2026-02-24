@@ -17,6 +17,9 @@ import {
   X,
   Minus,
   Unplug,
+  Kanban,
+  Workflow,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,16 +35,19 @@ const SIDEBAR_SECTIONS = [
       { key: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
       { key: "system", label: "System", href: "/system", icon: Server },
       { key: "gateway", label: "Gateway", href: "/gateway", icon: Unplug },
+      { key: "process", label: "Process", href: "/process", icon: Workflow },
       { key: "activity", label: "Activity", href: "/activity", icon: Activity },
     ],
   },
   {
     label: "Operations",
     items: [
+      { key: "boards", label: "Boards", href: "/boards", icon: Kanban },
       { key: "tasks", label: "Tasks", href: "/tasks", icon: ListTodo },
       { key: "builds", label: "Builds", href: "/builds", icon: Hammer },
       { key: "content", label: "Content", href: "/content", icon: FileText },
       { key: "revenue", label: "Revenue", href: "/revenue", icon: DollarSign },
+      { key: "activations", label: "Activations", href: "/activations", icon: Zap },
     ],
   },
   {
