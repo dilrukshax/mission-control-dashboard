@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/dilan/mission-control-dashboard"
+ROOT="/home/dilan/Project/mission-control-dashboard"
 cd "$ROOT"
 
 pnpm install --frozen-lockfile=false

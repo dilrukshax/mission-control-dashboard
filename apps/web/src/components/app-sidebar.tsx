@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   Minus,
+  Unplug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ const SIDEBAR_SECTIONS = [
     items: [
       { key: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
       { key: "system", label: "System", href: "/system", icon: Server },
+      { key: "gateway", label: "Gateway", href: "/gateway", icon: Unplug },
       { key: "activity", label: "Activity", href: "/activity", icon: Activity },
     ],
   },

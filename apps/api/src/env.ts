@@ -9,6 +9,7 @@ export const Env = z.object({
     .default("/home/dilan/.openclaw/mission-control/mission-control.sqlite"),
   // OpenClaw gateway
   OPENCLAW_URL: z.string().default("ws://192.168.8.50:18789"),
+  OPENCLAW_HTTP_URL: z.string().default("http://192.168.8.50:18789"),
   OPENCLAW_TOKEN: z.string().min(1).optional(),
   // Pass 4 auth keys (optional; when unset, API runs in open local-dev mode)
   AUTH_OWNER_KEY: z.string().min(1).optional(),
@@ -26,6 +27,7 @@ export function getEnv(): Env {
     ALLOW_CIDR: process.env.ALLOW_CIDR,
     DB_PATH: process.env.DB_PATH,
     OPENCLAW_URL: process.env.OPENCLAW_URL,
+    OPENCLAW_HTTP_URL: process.env.OPENCLAW_HTTP_URL,
     OPENCLAW_TOKEN: process.env.OPENCLAW_TOKEN,
     AUTH_OWNER_KEY: process.env.AUTH_OWNER_KEY,
     AUTH_OPERATOR_KEY: process.env.AUTH_OPERATOR_KEY,

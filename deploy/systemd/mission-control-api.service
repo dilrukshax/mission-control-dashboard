@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/dilan/mission-control-dashboard
-ExecStart=/home/dilan/mission-control-dashboard/scripts/prod/start-api.sh
+WorkingDirectory=/home/dilan/Project/mission-control-dashboard
+ExecStart=/home/dilan/Project/mission-control-dashboard/scripts/prod/start-api.sh
 Restart=always
 RestartSec=3
 
@@ -15,7 +15,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=false
-ReadWritePaths=/home/dilan/mission-control-dashboard /home/dilan/note /home/dilan/.openclaw/mission-control
+ReadWritePaths=/home/dilan/Project/mission-control-dashboard /home/dilan/note /home/dilan/.openclaw/mission-control
 
 [Install]
 WantedBy=default.target

@@ -234,3 +234,64 @@ export async function fetchMemoryNotes(agentId?: string): Promise<MemoryNote[]> 
   const data = await getJson<{ memoryNotes: MemoryNote[] }>(url);
   return data.memoryNotes ?? [];
 }
+
+// ── OpenClaw Gateway types ─────────────────────────────
+
+export type OpenClawAgent = {
+  id: string;
+  name: string;
+  workspace: string;
+  identity: {
+    name: string;
+    theme: string;
+    emoji: string;
+  };
+  status: "online" | "offline" | "unknown";
+  lastSeen?: string;
+};
+
+export type OpenClawSession = {
+  id: string;
+  agentId: string;
+  status: "active" | "completed" | "error" | "unknown";
+  startedAt?: string;
+  messageCount: number;
+};
+
+export type GatewayHealth = {
+  connected: boolean;
+  url: string;
+  latencyMs: number | null;
+  version: string | null;
+  agentCount: number;
+  error: string | null;
+  checkedAt: string;
+};
+
+export type GatewayStatus = {
+  gateway: GatewayHealth;
+  memory: { exists: boolean; sizeBytes: number | null; path: string };
+  agents: number;
+  sessions: number;
+};
+
+// ── OpenClaw fetch functions ───────────────────────────
+
+export async function fetchGatewayHealth(): Promise<GatewayHealth> {
+  return getJson<GatewayHealth>("/api/openclaw/health");
+}
+
+export async function fetchGatewayStatus(): Promise<GatewayStatus> {
+  return getJson<GatewayStatus>("/api/openclaw/status");
+}
+
+export async function fetchOpenClawAgents(): Promise<OpenClawAgent[]> {
+  const data = await getJson<{ agents: OpenClawAgent[] }>("/api/openclaw/agents");
+  return data.agents ?? [];
+}
+
+export async function fetchOpenClawSessions(): Promise<OpenClawSession[]> {
+  const data = await getJson<{ sessions: OpenClawSession[] }>("/api/openclaw/sessions");
+  return data.sessions ?? [];
+}
+
